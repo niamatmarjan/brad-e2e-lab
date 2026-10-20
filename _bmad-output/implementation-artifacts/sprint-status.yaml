@@ -1,0 +1,6 @@
+# Disposable v6 BMAD-style state only. Native BMAD installer owns its runtime and workflow configuration.
+generated: "2026-10-20"
+project: brad-e2e-lab
+development_status:
+  epic-1: in-progress
+  1-1-rate-limiter: ready-for-dev
