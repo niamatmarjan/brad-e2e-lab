@@ -1,8 +1,8 @@
 # BRAD v0.5.1 E2E pilot protocol
 
-Tracking: [BRAD issue #18](https://github.com/niamatmarjan/brad/issues/18). The baseline remains unchanged until the pilot branch is created by the coding host.
+Tracking: [BRAD issue #18](https://github.com/niamatmarjan/brad/issues/18). Historical Story 1.1 pilot protocol. Implementation was merged through [lab PR #2](https://github.com/niamatmarjan/brad-e2e-lab/pull/2) after green CI. Story 1.2 has a **separate** [resume protocol](RESUME_PILOT.md).
 
-## Frozen Story 1.1
+## Completed Story 1.1
 The exact approved story is [1-1-rate-limiter.md](_bmad-output/implementation-artifacts/1-1-rate-limiter.md). It specifies **per-client fixed windows**, not sliding windows. BRAD may not silently change this requirement.
 
 ## Bounded authorization
@@ -17,4 +17,4 @@ Record separately: **L1** installed-skill contract, **L2** exact target resoluti
 A correct route does not mean the workflow ran. `npm test` is not native BMAD skill invocation. A reviewer subagent alone is not proof that its installed native skill was loaded.
 
 ## Completion
-A completed pilot has a reproducible feature, passing actual tests, code review with findings and remediation, a real GitHub PR link, and checked GitHub CI conclusion. Leave that PR open for maintainer assessment. On failure, preserve evidence and exact resume instructions without inventing PASS.
+Story 1.1 met the documented implementation/remote-PR/CI gates and was later merged with explicit maintainer authorization. This section records the original pilot stopping conditions, not a standing prohibition on a later authorized merge. On failure, preserve evidence and exact resume instructions without inventing PASS.
