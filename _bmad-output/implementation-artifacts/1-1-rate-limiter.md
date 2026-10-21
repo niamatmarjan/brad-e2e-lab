@@ -1,6 +1,6 @@
 # Story 1.1 — Deterministic fixed-window per-client rate limiter
 
-Status: ready-for-dev
+Status: done
 Epic: 1 — Core request throttling
 
 ## User outcome
