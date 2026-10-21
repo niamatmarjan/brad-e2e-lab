@@ -144,6 +144,72 @@ export class RateLimiter {
   }
 
   /**
+   * Returns a snapshot of a client's current rate-limit allowance without consuming quota.
+   *
+   * @param {string} clientKey - Non-empty, non-whitespace string identifying the client
+   * @returns {{
+   *   allowed: boolean,
+   *   limit: number,
+   *   remaining: number,
+   *   resetTime: number|null,
+   *   resetMs: number,
+   *   retryAfterMs: number
+   * }}
+   */
+  peek(clientKey) {
+    if (typeof clientKey !== 'string' || clientKey.trim().length === 0) {
+      throw new TypeError('clientKey must be a non-empty, non-whitespace string');
+    }
+
+    const key = clientKey.trim();
+
+    const currentTime = this.#now();
+    if (typeof currentTime !== 'number' || !Number.isFinite(currentTime)) {
+      throw new TypeError('Clock function now() must return a finite number');
+    }
+
+    const clientState = this.#clients.get(key);
+
+    // If client was never seen or existing window has expired at or before currentTime
+    if (!clientState || currentTime >= clientState.resetTime) {
+      return {
+        allowed: true,
+        limit: this.#limit,
+        remaining: this.#limit,
+        resetTime: null,
+        resetMs: 0,
+        retryAfterMs: 0,
+      };
+    }
+
+    // Active window with quota remaining
+    if (clientState.count < this.#limit) {
+      const remaining = this.#limit - clientState.count;
+      const resetMs = Math.max(0, Math.ceil(clientState.resetTime - currentTime));
+
+      return {
+        allowed: true,
+        limit: this.#limit,
+        remaining,
+        resetTime: clientState.resetTime,
+        resetMs,
+        retryAfterMs: 0,
+      };
+    }
+
+    // Active window but quota exhausted
+    const resetMs = Math.max(0, Math.ceil(clientState.resetTime - currentTime));
+    return {
+      allowed: false,
+      limit: this.#limit,
+      remaining: 0,
+      resetTime: clientState.resetTime,
+      resetMs,
+      retryAfterMs: resetMs,
+    };
+  }
+
+  /**
    * Sweeps and evicts expired client records from memory.
    * @param {number} [targetTime] - Optional reference time; defaults to current clock
    * @returns {number} Number of evicted expired clients

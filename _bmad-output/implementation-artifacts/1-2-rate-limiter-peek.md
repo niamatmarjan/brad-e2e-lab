@@ -1,6 +1,6 @@
 # Story 1.2 — Non-mutating fixed-window quota peek
 
-Status: ready-for-dev
+Status: done
 Epic: 1 — Core request throttling
 Validation objective: interrupted session and safe BRAD resume ([issue #19](https://github.com/niamatmarjan/brad/issues/19))
 

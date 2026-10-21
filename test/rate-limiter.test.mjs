@@ -328,3 +328,296 @@ test('reset() clears specific client or all clients', () => {
   assert.equal(limiter.consume('c1').allowed, true);
   assert.equal(limiter.consume('c2').allowed, true);
 });
+
+test('peek() on a never-seen client reports a full quota and does not create a client record', () => {
+  const limiter = new RateLimiter({ limit: 5, windowMs: 1000 });
+  assert.equal(limiter.clientCount, 0);
+
+  const snapshot = limiter.peek('never-seen-client');
+  assert.deepEqual(snapshot, {
+    allowed: true,
+    limit: 5,
+    remaining: 5,
+    resetTime: null,
+    resetMs: 0,
+    retryAfterMs: 0,
+  });
+
+  assert.equal(limiter.clientCount, 0);
+});
+
+test('peek() on a client with an active window does not consume any allowance or change its counters', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 3,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  const consumed = limiter.consume('client-active');
+  assert.equal(consumed.allowed, true);
+  assert.equal(consumed.remaining, 2);
+  assert.equal(limiter.clientCount, 1);
+
+  const peeked = limiter.peek('client-active');
+  assert.deepEqual(peeked, {
+    allowed: true,
+    limit: 3,
+    remaining: 2,
+    resetTime: 2000,
+    resetMs: 1000,
+    retryAfterMs: 0,
+  });
+
+  assert.equal(limiter.clientCount, 1);
+  const nextConsume = limiter.consume('client-active');
+  assert.equal(nextConsume.allowed, true);
+  assert.equal(nextConsume.remaining, 1);
+});
+
+test('AC1: peek rejects invalid, blank, or whitespace-only clientKey', () => {
+  const limiter = new RateLimiter({ limit: 3, windowMs: 1000 });
+  const invalidKeys = ['', '   ', '\t', '\n', ' \t \n ', null, undefined, 123, true, {}, []];
+
+  for (const clientKey of invalidKeys) {
+    assert.throws(
+      () => limiter.peek(clientKey),
+      TypeError,
+      'Should throw TypeError for clientKey: ' + JSON.stringify(clientKey)
+    );
+  }
+});
+
+test('AC1: peek trims client keys consistently with consume', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 2,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('user-trim');
+  const snapshot = limiter.peek('   user-trim   ');
+  assert.equal(snapshot.allowed, true);
+  assert.equal(snapshot.remaining, 1);
+  assert.equal(snapshot.resetTime, 2000);
+});
+
+test('AC2: peek on an exhausted window returns allowed: false and retryAfterMs equal to resetMs', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 2,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('client-exhausted');
+  limiter.consume('client-exhausted');
+
+  currentTime = 1300;
+  const snapshot = limiter.peek('client-exhausted');
+  assert.deepEqual(snapshot, {
+    allowed: false,
+    limit: 2,
+    remaining: 0,
+    resetTime: 2000,
+    resetMs: 700,
+    retryAfterMs: 700,
+  });
+
+  // Verify clientCount and counters remain untouched
+  assert.equal(limiter.clientCount, 1);
+  assert.equal(limiter.peek('client-exhausted').allowed, false);
+});
+
+test('AC3: peek on an expired window reports full quota without creating/resetting window or evicting record', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 3,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('client-expired');
+  assert.equal(limiter.clientCount, 1);
+
+  // Advance time past window reset
+  currentTime = 2500;
+  const snapshot = limiter.peek('client-expired');
+  assert.deepEqual(snapshot, {
+    allowed: true,
+    limit: 3,
+    remaining: 3,
+    resetTime: null,
+    resetMs: 0,
+    retryAfterMs: 0,
+  });
+
+  // Stored state is NOT evicted or reset by peek
+  assert.equal(limiter.clientCount, 1);
+
+  // Next consume establishes a new window starting at current time
+  const consumed = limiter.consume('client-expired');
+  assert.equal(consumed.allowed, true);
+  assert.equal(consumed.remaining, 2);
+  assert.equal(consumed.resetTime, 3500);
+  assert.equal(consumed.resetMs, 1000);
+});
+
+test('AC4: peek at exact window boundary (exact expiry) reports full quota without mutating state', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 2,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('client-boundary');
+  limiter.consume('client-boundary');
+
+  // Exact boundary: currentTime === resetTime (2000)
+  currentTime = 2000;
+  const snapshot = limiter.peek('client-boundary');
+  assert.deepEqual(snapshot, {
+    allowed: true,
+    limit: 2,
+    remaining: 2,
+    resetTime: null,
+    resetMs: 0,
+    retryAfterMs: 0,
+  });
+
+  // Client record is preserved, not evicted
+  assert.equal(limiter.clientCount, 1);
+});
+
+test('AC2 & AC5: peek with high-resolution / floating-point clock yields ceiling integer resetMs and retryAfterMs', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 2,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('client-fractional');
+  limiter.consume('client-fractional');
+
+  currentTime = 1500.2;
+  const snapshot = limiter.peek('client-fractional');
+  assert.equal(snapshot.allowed, false);
+  assert.equal(snapshot.resetMs, 500);
+  assert.equal(snapshot.retryAfterMs, 500);
+
+  // Non-exhausted active window with fractional clock
+  currentTime = 1000;
+  const limiterActive = new RateLimiter({
+    limit: 3,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+  limiterActive.consume('client-fractional-active');
+  currentTime = 1200.7;
+  const activeSnapshot = limiterActive.peek('client-fractional-active');
+  assert.equal(activeSnapshot.allowed, true);
+  assert.equal(activeSnapshot.resetMs, 800);
+  assert.equal(activeSnapshot.retryAfterMs, 0);
+});
+
+test('AC5: peek throws TypeError when clock returns invalid or non-finite timestamp', () => {
+  const invalidClocks = [
+    () => 'not-a-number',
+    () => NaN,
+    () => Infinity,
+    () => -Infinity,
+    () => undefined,
+    () => null,
+  ];
+
+  for (const badClock of invalidClocks) {
+    const limiter = new RateLimiter({
+      limit: 5,
+      windowMs: 1000,
+      now: badClock,
+    });
+    assert.throws(
+      () => limiter.peek('client-bad-clock'),
+      TypeError,
+      'Should throw TypeError when clock returns non-finite value'
+    );
+  }
+});
+
+test('AC4: repeated peek calls preserve clientCount, counters, expiry, and subsequent consume behavior', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 3,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  limiter.consume('client-repeat');
+  assert.equal(limiter.clientCount, 1);
+
+  // 5 repeated peeks at time 1100
+  currentTime = 1100;
+  for (let i = 0; i < 5; i++) {
+    const p = limiter.peek('client-repeat');
+    assert.equal(p.allowed, true);
+    assert.equal(p.remaining, 2);
+    assert.equal(p.resetTime, 2000);
+    assert.equal(p.resetMs, 900);
+    assert.equal(p.retryAfterMs, 0);
+    assert.equal(limiter.clientCount, 1);
+  }
+
+  // Next consume succeeds as expected
+  currentTime = 1200;
+  const next = limiter.consume('client-repeat');
+  assert.equal(next.allowed, true);
+  assert.equal(next.remaining, 1);
+  assert.equal(next.resetMs, 800);
+});
+
+test('AC2 & AC4: multi-client coexistence preserves independent peek quotas across clients', () => {
+  let currentTime = 1000;
+  const limiter = new RateLimiter({
+    limit: 2,
+    windowMs: 1000,
+    now: () => currentTime,
+  });
+
+  // Client A consumes full quota (exhausted)
+  limiter.consume('client-A');
+  limiter.consume('client-A');
+
+  // Client B consumes 1 of 2 (active)
+  limiter.consume('client-B');
+
+  // Client C is never seen (virgin)
+
+  currentTime = 1200;
+  // Peek client A: exhausted
+  const peekA = limiter.peek('client-A');
+  assert.equal(peekA.allowed, false);
+  assert.equal(peekA.remaining, 0);
+  assert.equal(peekA.resetMs, 800);
+  assert.equal(peekA.retryAfterMs, 800);
+
+  // Peek client B: active with quota
+  const peekB = limiter.peek('client-B');
+  assert.equal(peekB.allowed, true);
+  assert.equal(peekB.remaining, 1);
+  assert.equal(peekB.resetMs, 800);
+  assert.equal(peekB.retryAfterMs, 0);
+
+  // Peek client C: full allowance, no record created
+  const peekC = limiter.peek('client-C');
+  assert.equal(peekC.allowed, true);
+  assert.equal(peekC.remaining, 2);
+  assert.equal(peekC.resetTime, null);
+  assert.equal(peekC.resetMs, 0);
+  assert.equal(peekC.retryAfterMs, 0);
+
+  // Stored clientCount must remain exactly 2 (A and B only)
+  assert.equal(limiter.clientCount, 2);
+});
