@@ -213,9 +213,17 @@ export class RateLimiter {
    * Sweeps and evicts expired client records from memory.
    * @param {number} [targetTime] - Optional reference time; defaults to current clock
    * @returns {number} Number of evicted expired clients
+   * @throws {TypeError} If the reference time (targetTime, or the clock value when omitted) is not a finite number
    */
   prune(targetTime) {
     const referenceTime = targetTime !== undefined ? targetTime : this.#now();
+    if (typeof referenceTime !== 'number' || !Number.isFinite(referenceTime)) {
+      throw new TypeError(
+        targetTime !== undefined
+          ? 'targetTime must be a finite number'
+          : 'Clock function now() must return a finite number'
+      );
+    }
     let evicted = 0;
     for (const [key, state] of this.#clients.entries()) {
       if (referenceTime >= state.resetTime) {

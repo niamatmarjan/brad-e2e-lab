@@ -621,3 +621,60 @@ test('AC2 & AC4: multi-client coexistence preserves independent peek quotas acro
   // Stored clientCount must remain exactly 2 (A and B only)
   assert.equal(limiter.clientCount, 2);
 });
+
+test('Story 1.3 AC1/AC3: prune rejects invalid explicit timestamps before evicting anything', () => {
+  const time = 1000;
+  const limiter = new RateLimiter({ limit: 1, windowMs: 500, now: () => time });
+  limiter.consume('a');
+  limiter.consume('b');
+
+  const invalid = ['0', '', null, true, false, {}, [], NaN, Infinity, -Infinity];
+  for (const bad of invalid) {
+    assert.throws(() => limiter.prune(bad), TypeError, 'prune(' + String(bad) + ')');
+    assert.equal(limiter.clientCount, 2);
+  }
+});
+
+test('Story 1.3 AC2/AC3: prune rejects invalid clock values when targetTime is omitted', () => {
+  const clocks = [() => 'x', () => NaN, () => Infinity, () => -Infinity, () => undefined, () => null];
+  for (const badClock of clocks) {
+    let good = true;
+    const limiter = new RateLimiter({
+      limit: 1,
+      windowMs: 500,
+      now: () => (good ? 1000 : badClock()),
+    });
+    limiter.consume('a');
+    good = false;
+    assert.throws(() => limiter.prune(), TypeError);
+    assert.equal(limiter.clientCount, 1);
+  }
+});
+
+test('Story 1.3 AC4/AC5: prune with valid timestamps keeps exact-expiry semantics and returns eviction count', () => {
+  let time = 1000;
+  const limiter = new RateLimiter({ limit: 1, windowMs: 500, now: () => time });
+  limiter.consume('early'); // resetTime 1500
+  time = 1200;
+  limiter.consume('late'); // resetTime 1700
+  time = 1300;
+  limiter.consume('latest'); // resetTime 1800
+
+  assert.equal(limiter.prune(1499), 0);
+  assert.equal(limiter.clientCount, 3);
+
+  // exact expiry evicts only 'early'
+  assert.equal(limiter.prune(1500), 1);
+  assert.equal(limiter.clientCount, 2);
+
+  // omitted targetTime uses the clock; exact expiry again
+  time = 1700;
+  assert.equal(limiter.prune(), 1);
+  assert.equal(limiter.clientCount, 1);
+
+  // negative and fractional finite values are valid
+  assert.equal(limiter.prune(-5), 0);
+  assert.equal(limiter.prune(1799.5), 0);
+  assert.equal(limiter.prune(1800), 1);
+  assert.equal(limiter.clientCount, 0);
+});

@@ -1,6 +1,12 @@
+---
+status: done
+baseline_commit: 270aca8b63a8f6af8f4ba352f82206e141a23943
+context: []
+---
+
 # Story 1.3 — Harden RateLimiter.prune() timestamp validation
 
-Status: ready-for-dev
+Status: done
 Epic: 1 — Core request throttling
 Validation objective: complete ticket-to-PR provenance gate ([issue #15](https://github.com/niamatmarjan/brad/issues/15)); fictional disposable story.
 
@@ -24,3 +30,20 @@ Build and verify on a local branch first. Use a genuinely separate read-only rev
 Scope only `src/rate-limiter.mjs`, `test/rate-limiter.test.mjs`, this Story 1.3 file, and sprint-status tracking. Do not commit installed `.claude/`, `_bmad/`, user configuration, raw host traces, or unrelated files.
 
 Native BMAD owns implementation, review instructions and ticket-state transitions. BRAD only chooses/delegates and reports observed evidence.
+
+## Review Triage Log
+
+Layers: blind-hunter, edge-case-hunter, verification-gap (three separate context-free subagents).
+
+| # | Source | Finding | Verdict | Route | Evidence |
+|---|--------|---------|---------|-------|----------|
+| 1 | blind | Story status values disagree (frontmatter vs body vs sprint-status) | low | patch | Body line said in-progress while frontmatter said in-review; body synced. sprint-status stays in-progress until native transition. |
+| 2 | blind | No BigInt/Symbol/`new Number` cases | low | rejected | `typeof` check already rejects them; unlikely to regress and fix only adds cases. |
+| 3 | blind | Tests assert error class, not message | low | rejected | Messages are not in acceptance criteria. |
+| 4 | blind | No test that a bad clock is ignored when targetTime is valid | false | rejected | Code only calls the clock when targetTime is undefined; not a defect. |
+| 5 | blind | Clock-failure test passes trivially | false | rejected | The `Infinity` clock case would evict the expired client without the guard, so the test discriminates. |
+| 6 | blind | JSDoc lacks `@throws` | low | patch | Direct documentation correction on `prune()`. |
+| 7 | blind | No changelog/README/Dev Agent Record | false | rejected | Outside the story's file scope; fix would edit this spec. |
+| 8 | blind | consume/peek not touched | false | rejected | Both already validate the clock; story forbids changing them. |
+| 9 | edge | `prune(undefined)` falls back to clock | low | rejected | AC2 defines "omitted" and JS treats `undefined` as omitted; the guard needs `arguments.length` and adds complexity. |
+| 10 | verification-gap | No verification gaps found | n/a | n/a | Pre-verified, no findings. |
