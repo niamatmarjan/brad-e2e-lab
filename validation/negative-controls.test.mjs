@@ -113,3 +113,40 @@ test('NC8: False HOST_NATIVE_INVOKED claim without dispatch event fails closed',
   assert.equal(report.ok, false);
   assert.match(report.errors.join(' '), /CASE-04: no native dispatch event/);
 });
+
+
+test('NC9: BLOCKED outcome with modified workspace inventory fails closed', () => {
+  const run = loadCleanRun();
+  const c = run.cases.find(x => x.caseId === 'CASE-10');
+  c.after.files['unauthorized-blocked-change.txt'] = '0'.repeat(64);
+  const report = evaluateRun(run, BASE_DIR);
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join(' '), /CASE-10: refusal\/clarification changed file inventory/);
+});
+
+test('NC10: BLOCKED outcome with tampered transcript digest fails closed', () => {
+  const run = loadCleanRun();
+  const c = run.cases.find(x => x.caseId === 'CASE-10');
+  c.transcript.sha256 = 'f'.repeat(64);
+  const report = evaluateRun(run, BASE_DIR);
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join(' '), /CASE-10: transcript: transcript digest mismatch/);
+});
+
+test('NC11: BLOCKED outcome cannot replay another session', () => {
+  const run = loadCleanRun();
+  const blocked = run.cases.find(x => x.caseId === 'CASE-10');
+  blocked.sessionId = run.cases.find(x => x.caseId === 'CASE-09').sessionId;
+  const report = evaluateRun(run, BASE_DIR);
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join(' '), /CASE-10: missing\/replayed session ID/);
+});
+
+test('NC12: BLOCKED outcome cannot claim another route', () => {
+  const run = loadCleanRun();
+  const blocked = run.cases.find(x => x.caseId === 'CASE-10');
+  blocked.observedRoute = 'bmad-build';
+  const report = evaluateRun(run, BASE_DIR);
+  assert.equal(report.ok, false);
+  assert.match(report.errors.join(' '), /CASE-10: blocked outcome must route BLOCKED/);
+});
