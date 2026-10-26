@@ -1,7 +1,7 @@
 name: Lab CI
 on:
   pull_request:
-    branches: [main]
+    branches: [main, test/production-readiness-evidence-lab]
   push:
     branches: [main]
 permissions:
