@@ -10,3 +10,7 @@ The utility checks internal consistency and explicitly returns `certification: N
 node --test
 node validation/verify-evidence.mjs /path/to/private/sanitized-run.json
 ```
+
+## Independent cohort provenance audit
+
+The first Antigravity operator cohort (commit `4cc6c638`) reports **9 PASS / 1 BLOCKED**, but remains **independently unverified**: summarized events do not link to original host event IDs, and BLOCKED cases bypass the original structural verifier. See [the independent assessment](audit/COHORT1_REVIEW.md) and [provenance-gate.mjs](audit/provenance-gate.mjs). `node validation/audit/provenance-gate.mjs validation/cohort/run.json` is *expected to exit 1* until independent host/oracle/snapshot evidence is supplied. Its library tests document these outstanding blockers; this is not a new production certification claim.
