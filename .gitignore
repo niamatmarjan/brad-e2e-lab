@@ -6,3 +6,10 @@ coverage/
 !.env.example
 .DS_Store
 *.log
+.agent/
+.agents/
+.claude/
+.gemini/
+_bmad/
+evidence-private/
+private-evidence/

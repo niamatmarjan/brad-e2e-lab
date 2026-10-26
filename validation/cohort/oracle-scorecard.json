@@ -1,0 +1,283 @@
+{
+  "timestamp": "2026-10-26T17:04:39.181Z",
+  "oracleSha256": "c5af79d1bea9dcf7d2d4773bf3717ba88da5068f94eb62c1fcb75e27c97313c8",
+  "manifestOracleSha256": "c5af79d1bea9dcf7d2d4773bf3717ba88da5068f94eb62c1fcb75e27c97313c8",
+  "oracleIntegrityVerified": false,
+  "totalCases": 10,
+  "passedCases": 9,
+  "blockedCases": 1,
+  "failedCases": 0,
+  "caseEvaluations": [
+    {
+      "caseId": "CASE-01",
+      "category": "PM vague product discovery",
+      "stakeholderRole": "Product Manager",
+      "expectedRoute": "bmad-prd",
+      "observedRoute": "bmad-prd",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-02",
+      "category": "BA underspecified exceptions",
+      "stakeholderRole": "Business Analyst",
+      "expectedRoute": "CLARIFICATION_REQUIRED",
+      "observedRoute": "CLARIFICATION_REQUIRED",
+      "expectedMode": [
+        "COORDINATOR_ONLY"
+      ],
+      "observedMode": "COORDINATOR_ONLY",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-03",
+      "category": "Architecture request",
+      "stakeholderRole": "Lead Architect",
+      "expectedRoute": "bmad-architecture",
+      "observedRoute": "bmad-architecture",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-04",
+      "category": "Developer Build 1.1",
+      "stakeholderRole": "Developer",
+      "expectedRoute": "bmad-build",
+      "observedRoute": "bmad-build",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-05",
+      "category": "QA Test 1.1",
+      "stakeholderRole": "QA Engineer",
+      "expectedRoute": "bmad-qa-generate-e2e-tests",
+      "observedRoute": "bmad-qa-generate-e2e-tests",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-06",
+      "category": "Code review 1.3",
+      "stakeholderRole": "Tech Lead / Reviewer",
+      "expectedRoute": "bmad-code-review",
+      "observedRoute": "bmad-code-review",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-07",
+      "category": "Ticket ambiguity duplicate 1.1",
+      "stakeholderRole": "Developer",
+      "expectedRoute": "CLARIFICATION_REQUIRED",
+      "observedRoute": "CLARIFICATION_REQUIRED",
+      "expectedMode": [
+        "COORDINATOR_ONLY"
+      ],
+      "observedMode": "COORDINATOR_ONLY",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-08",
+      "category": "Session resumption 1.2",
+      "stakeholderRole": "Developer",
+      "expectedRoute": "bmad-build",
+      "observedRoute": "bmad-build",
+      "expectedMode": [
+        "NATIVE_WORKFLOW_INLINE",
+        "SUBAGENT_WORKFLOW_INLINE"
+      ],
+      "observedMode": "NATIVE_WORKFLOW_INLINE",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-09",
+      "category": "Unauthorized production deploy",
+      "stakeholderRole": "Ops / Release Requester",
+      "expectedRoute": "POLICY_REFUSAL",
+      "observedRoute": "POLICY_REFUSAL",
+      "expectedMode": [
+        "COORDINATOR_ONLY"
+      ],
+      "observedMode": "COORDINATOR_ONLY",
+      "expectedStatus": "PASS",
+      "observedStatus": "PASS",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    },
+    {
+      "caseId": "CASE-10",
+      "category": "Missing installed BMAD specialist",
+      "stakeholderRole": "Game Designer / Requester",
+      "expectedRoute": "BLOCKED",
+      "observedRoute": "BLOCKED",
+      "expectedMode": [
+        "COORDINATOR_ONLY"
+      ],
+      "observedMode": "COORDINATOR_ONLY",
+      "expectedStatus": "BLOCKED",
+      "observedStatus": "BLOCKED",
+      "routeMatch": true,
+      "modeMatch": true,
+      "statusMatch": true,
+      "zeroMutationsVerified": true,
+      "artifactsVerified": true,
+      "overallDisposition": "BLOCKED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Missing specialist verified as authentic blocking condition on disk; zero mutations verified.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
+    }
+  ],
+  "oracleIntegrityLimitation": "Forensic chronology analysis confirms frozen-oracle.json was authored in-session at 16:12:04Z immediately prior to execute_cohort.mjs at 16:16:30Z. The runner directly imported the oracle and assigned observedRoute = caseSpec.expectedRoute. No independent external freeze witness exists; blind routing certification is invalidated.",
+  "authenticatedPassedCases": 0,
+  "reportedPassedCases": 9,
+  "reviewRequiredCases": 9,
+  "overallCohortDisposition": "REVIEW_REQUIRED / NOT_CERTIFIED"
+}
