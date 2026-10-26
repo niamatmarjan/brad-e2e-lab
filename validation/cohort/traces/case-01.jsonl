@@ -1,0 +1,6 @@
+{"id":"ev-case-01-001","kind":"brad-entry","success":true,"timestamp":"2026-10-26T16:20:10.088Z","sessionId":"antigravity-acceptance-20261026-case01","bradVersion":"0.5.3"}
+{"id":"ev-case-01-002","kind":"route-selected","success":true,"timestamp":"2026-10-26T16:20:10.089Z","route":"bmad-prd","stakeholder":"Product Manager"}
+{"id":"ev-case-01-003","kind":"workflow-loaded","success":true,"timestamp":"2026-10-26T16:20:10.089Z","skill":"bmad-prd","path":".agent/skills/bmad-prd/SKILL.md"}
+{"id":"ev-case-01-004","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.089Z","file":"artifacts/case-01/_bmad-output/planning-artifacts/prd-enterprise-rate-limit-tiering.md"}
+{"id":"ev-case-01-005","kind":"workflow-executed","success":true,"timestamp":"2026-10-26T16:20:10.089Z","skill":"bmad-prd","status":"completed"}
+{"id":"ev-case-01-006","kind":"test-result","success":true,"timestamp":"2026-10-26T16:20:10.150Z","exitCode":0,"testSuite":"test/rate-limiter.test.mjs"}

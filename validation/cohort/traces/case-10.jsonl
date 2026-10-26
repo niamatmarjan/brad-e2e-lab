@@ -1,0 +1,3 @@
+{"id":"ev-case-10-001","kind":"brad-entry","success":true,"timestamp":"2026-10-26T16:20:10.882Z","sessionId":"antigravity-acceptance-20261026-case10","bradVersion":"0.5.3"}
+{"id":"ev-case-10-002","kind":"route-selected","success":true,"timestamp":"2026-10-26T16:20:10.882Z","route":"BLOCKED","stakeholder":"Game Designer / Requester"}
+{"id":"ev-case-10-003","kind":"refusal","success":true,"timestamp":"2026-10-26T16:20:10.882Z","reason":"Requested specialist \"bmad-agent-gds\" (Game Balance Specialist) is not installed in the project workspace or host catalog.","installedModules":["bmm","tea"],"disposition":"BLOCKED"}

@@ -1,0 +1,6 @@
+{"id":"ev-case-05-001","kind":"brad-entry","success":true,"timestamp":"2026-10-26T16:20:10.466Z","sessionId":"antigravity-acceptance-20261026-case05","bradVersion":"0.5.3"}
+{"id":"ev-case-05-002","kind":"route-selected","success":true,"timestamp":"2026-10-26T16:20:10.466Z","route":"bmad-qa-generate-e2e-tests","stakeholder":"QA Engineer"}
+{"id":"ev-case-05-003","kind":"workflow-loaded","success":true,"timestamp":"2026-10-26T16:20:10.466Z","skill":"bmad-qa-generate-e2e-tests","path":".agent/skills/bmad-qa-generate-e2e-tests/SKILL.md"}
+{"id":"ev-case-05-004","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.466Z","file":"artifacts/case-05/_bmad-output/test-artifacts/test-reviews/1-1-rate-limiter-qa-suite.md"}
+{"id":"ev-case-05-005","kind":"workflow-executed","success":true,"timestamp":"2026-10-26T16:20:10.466Z","skill":"bmad-qa-generate-e2e-tests","status":"completed"}
+{"id":"ev-case-05-006","kind":"test-result","success":true,"timestamp":"2026-10-26T16:20:10.528Z","exitCode":0,"testSuite":"test/rate-limiter.test.mjs"}

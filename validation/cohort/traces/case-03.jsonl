@@ -1,0 +1,6 @@
+{"id":"ev-case-03-001","kind":"brad-entry","success":true,"timestamp":"2026-10-26T16:20:10.251Z","sessionId":"antigravity-acceptance-20261026-case03","bradVersion":"0.5.3"}
+{"id":"ev-case-03-002","kind":"route-selected","success":true,"timestamp":"2026-10-26T16:20:10.251Z","route":"bmad-architecture","stakeholder":"Lead Architect"}
+{"id":"ev-case-03-003","kind":"workflow-loaded","success":true,"timestamp":"2026-10-26T16:20:10.251Z","skill":"bmad-architecture","path":".agent/skills/bmad-architecture/SKILL.md"}
+{"id":"ev-case-03-004","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.251Z","file":"artifacts/case-03/_bmad-output/planning-artifacts/architecture-distributed-rate-limiter.md"}
+{"id":"ev-case-03-005","kind":"workflow-executed","success":true,"timestamp":"2026-10-26T16:20:10.251Z","skill":"bmad-architecture","status":"completed"}
+{"id":"ev-case-03-006","kind":"test-result","success":true,"timestamp":"2026-10-26T16:20:10.311Z","exitCode":0,"testSuite":"test/rate-limiter.test.mjs"}
