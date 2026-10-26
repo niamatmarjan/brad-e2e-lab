@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-10-26T16:20:58.334Z",
+  "timestamp": "2026-10-26T17:04:39.181Z",
   "oracleSha256": "c5af79d1bea9dcf7d2d4773bf3717ba88da5068f94eb62c1fcb75e27c97313c8",
   "manifestOracleSha256": "c5af79d1bea9dcf7d2d4773bf3717ba88da5068f94eb62c1fcb75e27c97313c8",
-  "oracleIntegrityVerified": true,
+  "oracleIntegrityVerified": false,
   "totalCases": 10,
   "passedCases": 9,
   "blockedCases": 1,
@@ -26,8 +26,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-02",
@@ -46,8 +52,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-03",
@@ -67,8 +79,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-04",
@@ -88,8 +106,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-05",
@@ -109,8 +133,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-06",
@@ -130,8 +160,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-07",
@@ -150,8 +186,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-08",
@@ -171,8 +213,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-09",
@@ -191,8 +239,14 @@
       "statusMatch": true,
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
-      "overallDisposition": "PASS",
-      "notes": []
+      "overallDisposition": "REVIEW_REQUIRED",
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Artifacts and test outputs physically verified on fixture disk.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     },
     {
       "caseId": "CASE-10",
@@ -212,7 +266,18 @@
       "zeroMutationsVerified": true,
       "artifactsVerified": true,
       "overallDisposition": "BLOCKED",
-      "notes": []
+      "notes": [
+        "Structural file and digest checks passed.",
+        "Missing specialist verified as authentic blocking condition on disk; zero mutations verified.",
+        "Lacks authentic Antigravity host subagent provenance (ev-case labels are generated summary identifiers without raw transcript SHA-256 or native tool-call IDs)."
+      ],
+      "hostProvenanceVerified": false,
+      "routeSemanticValidity": true
     }
-  ]
+  ],
+  "oracleIntegrityLimitation": "Forensic chronology analysis confirms frozen-oracle.json was authored in-session at 16:12:04Z immediately prior to execute_cohort.mjs at 16:16:30Z. The runner directly imported the oracle and assigned observedRoute = caseSpec.expectedRoute. No independent external freeze witness exists; blind routing certification is invalidated.",
+  "authenticatedPassedCases": 0,
+  "reportedPassedCases": 9,
+  "reviewRequiredCases": 9,
+  "overallCohortDisposition": "REVIEW_REQUIRED / NOT_CERTIFIED"
 }
