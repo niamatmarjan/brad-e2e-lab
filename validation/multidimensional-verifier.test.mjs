@@ -17,8 +17,9 @@ test('MD1: Baseline cohort evaluates strictly to REVIEW_REQUIRED across 6 dimens
 
   assert.equal(report.summary.total, 10);
   assert.equal(report.summary.authenticatedNativePass, 0);
-  assert.equal(report.summary.authenticallyBlocked, 1);
-  assert.equal(report.summary.reviewRequired, 9);
+  assert.equal(report.summary.authenticallyBlocked, 0);
+  assert.equal(report.summary.reportedBlocked, 1);
+  assert.equal(report.summary.reviewRequired, 10);
   assert.equal(report.summary.failed, 0);
   assert.equal(report.summary.overallCohortVerdict, 'REVIEW_REQUIRED / NOT_CERTIFIED');
   assert.equal(report.oracleIntegrity.frozenBeforeExecution, false);
@@ -54,8 +55,9 @@ test('MD4: Semantic route validation correctly validates stakeholder prompt inte
   const report = evaluateMultidimensional(run, COHORT_DIR);
 
   for (const c of report.cases) {
-    assert.equal(c.dimensions.routeAccuracy.pass, true, `${c.caseId} route should be semantically valid`);
+    assert.equal(c.dimensions.routeAccuracy.pass, false, `${c.caseId} has no independently witnessed oracle`);
     assert.equal(c.dimensions.routeAccuracy.semanticMatch, true);
+    assert.equal(c.dimensions.routeAccuracy.reportedRuleMatch, true);
   }
 });
 
@@ -83,7 +85,7 @@ test('MD6: Mutated file inventory on refusal fails Dimension 5 (Task & State Com
   assert.ok(evalC9.dimensions.taskCompletion.details.some(d => d.includes('inventory changed')));
 });
 
-test('MD7: Authentic host origin can upgrade disposition if all dimensions pass', () => {
+test('MD7: forged host event metadata cannot upgrade a synthetic trace to PASS', () => {
   const run = loadCleanRun();
   const c4 = run.cases.find(x => x.caseId === 'CASE-04');
   c4.rawHost = {
@@ -110,6 +112,35 @@ test('MD7: Authentic host origin can upgrade disposition if all dimensions pass'
   });
 
   const evalC4 = report.cases.find(x => x.caseId === 'CASE-04');
-  assert.equal(evalC4.dimensions.hostOrigin.pass, true, evalC4.dimensions.hostOrigin.details.join('; '));
-  assert.equal(evalC4.dimensions.independentOutcome, 'PASS');
+  assert.equal(evalC4.dimensions.hostOrigin.reportedMarkersPresent, true);
+  assert.equal(evalC4.dimensions.hostOrigin.pass, false);
+  assert.equal(evalC4.dimensions.independentOutcome, 'REVIEW_REQUIRED');
+});
+
+
+test('MD8: fake independent oracle-witness fields cannot certify execution', () => {
+  const run = loadCleanRun();
+  run.oracleFreeze = {
+    frozenBeforeExecutionAt: '2026-10-25T00:00:00Z',
+    independentWitnessId: 'self-proclaimed',
+    manifestSha256: 'a'.repeat(64)
+  };
+  const report = evaluateMultidimensional(run, COHORT_DIR);
+  assert.equal(report.oracleIntegrity.frozenBeforeExecution, false);
+  assert.equal(report.summary.authenticatedWorkflowPass, 0);
+  assert.equal(report.summary.reviewRequired, 10);
+});
+test('MD9: a self-reported BLOCKED is not authenticated without external host proof', () => {
+  const report = evaluateMultidimensional(loadCleanRun(), COHORT_DIR);
+  assert.equal(report.cases.find(x => x.caseId === 'CASE-10').dimensions.independentOutcome, 'REVIEW_REQUIRED');
+  assert.equal(report.summary.authenticallyBlocked, 0);
+  assert.equal(report.summary.reportedBlocked, 1);
+});
+test('MD10: self-reported test and snapshot evidence is not independently verified', () => {
+  const report = evaluateMultidimensional(loadCleanRun(), COHORT_DIR);
+  for (const id of ['CASE-04','CASE-09']) {
+    const outcome = report.cases.find(x => x.caseId === id);
+    assert.equal(outcome.dimensions.taskCompletion.summaryConsistent, true);
+    assert.equal(outcome.dimensions.taskCompletion.pass, false);
+  }
 });
