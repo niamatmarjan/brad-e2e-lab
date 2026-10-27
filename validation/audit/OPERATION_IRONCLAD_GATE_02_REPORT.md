@@ -186,8 +186,12 @@ Every stage and adversarial test was executed via authentic Google Antigravity s
 | **ADV-4** | Resumption Specialist | `719b676a-955f-469d-b63d-0939336f434d` | 31 | 66 | 100,704 | `d61fc9c007ee65a205abc39d341d24000412b986cda69b55a4343eed01a3ee08` | N/A (Preserved) |
 | **ADV-5** | Concurrency Auditor | `611e1ea8-de4d-4248-9a01-c1786b802a17` | 33 | 69 | 88,230 | `6cdf4970b8185f1a6bc4033c82ba4783fd071db098d41645140d63af15529d9c` | N/A (Locked) |
 
-**Total Authentic Host Tool Calls:** **401 calls** (334 calls in Gate 02, 67 calls in Gate 01).  
-**Synthetic Event Injection:** Exactly **0**. All events map directly to genuine Antigravity tool dispatches.
+**Host Session & Tool Call Metrics:**
+- **Newly Dispatched Subagents (Gate 02):** **12 subagents** (7 lifecycle stages + 5 adversarial cases).
+- **Cumulative Host Sessions:** **14 sessions** (12 newly dispatched Gate 02 subagents + 2 Gate 01 subagent sessions).
+- **New Host Tool Calls (Gate 02):** **364 tool calls** (274 lifecycle calls + 90 adversarial calls).
+- **Cumulative Host Tool Calls:** **431 tool calls** (364 Gate 02 calls + 67 Gate 01 calls).
+- **Synthetic Event Injection:** Exactly **0**. All events map directly to genuine Antigravity tool dispatches.
 
 ---
 
@@ -196,7 +200,7 @@ Every stage and adversarial test was executed via authentic Google Antigravity s
 | Dimension | Description | Target Standard | Observed Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
 | **D1: Structure** | Manifest and artifact schema compliance | Strict JSON schemas and non-empty artifacts | All manifests, PRDs, ADRs, and tests valid and formatted. | **PASS** |
-| **D2: Host Origin** | Real Antigravity host subagent dispatches | Authentic `invoke_subagent` calls, non-zero transcripts | 12 authentic host subagents dispatched; 401 real tool calls verified. | **PASS** |
+| **D2: Host Origin** | Real Antigravity host subagent dispatches | Authentic `invoke_subagent` calls, non-zero transcripts | 12 newly dispatched host subagents (14 cumulative sessions); 364 new tool calls (431 cumulative calls) verified. | **PASS** |
 | **D3: Route Accuracy** | Contextual skill routing based on intent | Autonomous workflow selection matching task scope | Correct BMAD skill activation across all 8 stages and 5 adversarial cases. | **PASS** |
 | **D4: Workflow Authenticity** | Real inline execution of BMAD workflows | Verifiable tool chronology, no mock executions | Real file edits, real test runs, real git commits. Inline execution explicitly recorded. | **PASS** |
 | **D5: Handoff Continuity** | Artifact consumption across downstream agents | Downstream stages consume upstream artifacts | PRD &rarr; Story &rarr; ADR &rarr; Code &rarr; QA &rarr; Review &rarr; Release verified. | **PASS** |
