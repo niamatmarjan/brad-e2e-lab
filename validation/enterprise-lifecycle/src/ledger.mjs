@@ -1,6 +1,20 @@
-import { Account, InvalidPrecisionError, MAX_SAFE_AMOUNT } from './account.mjs';
+import {
+  Account,
+  InvalidPrecisionError,
+  MAX_SAFE_AMOUNT,
+  MAX_SAFE_UNITS,
+  toBaseUnits,
+  fromBaseUnits,
+  validatePrecision
+} from './account.mjs';
 
-export { InvalidPrecisionError, MAX_SAFE_AMOUNT };
+export {
+  InvalidPrecisionError,
+  MAX_SAFE_AMOUNT,
+  MAX_SAFE_UNITS,
+  toBaseUnits,
+  fromBaseUnits
+};
 
 export class IdempotencyConflictError extends Error {
   constructor(message = 'Idempotency key reused with conflicting transaction payload') {
@@ -40,15 +54,6 @@ function validateDelimiter(val, name) {
   }
 }
 
-function validatePrecision(val, name) {
-  if (Math.abs(val * 10000) > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(Math.round(Math.abs(val * 10000)))) {
-    throw new InvalidPrecisionError(`${name} exceeds maximum safe integer monetary limit of ${MAX_SAFE_AMOUNT}`);
-  }
-  if (Math.abs(val * 10000 - Math.round(val * 10000)) >= 1e-9) {
-    throw new InvalidPrecisionError(`${name} exceeds maximum precision of 4 decimal places`);
-  }
-}
-
 function payloadsMatch(storedPayload, incoming) {
   const storedId = storedPayload.id ?? storedPayload.txId;
   if (incoming.id !== storedId) {
@@ -64,7 +69,7 @@ function payloadsMatch(storedPayload, incoming) {
     const sE = storedPayload.entries[i];
     const inE = incoming.entries[i];
     if (inE.accountId !== sE.accountId) return false;
-    if (Math.round(inE.amount * 10000) !== Math.round(sE.amount * 10000)) return false;
+    if (toBaseUnits(inE.amount) !== toBaseUnits(sE.amount)) return false;
     if (inE.direction !== sE.direction) return false;
     if (inE.tenantId !== undefined && inE.tenantId !== null) {
       if (inE.tenantId !== sE.tenantId) return false;
@@ -166,10 +171,12 @@ export class Ledger {
   _emitAuditEvent({ tenantId, accountId, transactionId, type, currentBalance, creditLimit, details = {} }) {
     const account = this.getAccount(tenantId, accountId);
     const overdraftEnabled = account ? account.overdraftEnabled : false;
-    const overdraftUtilized = currentBalance < 0 ? Math.round(Math.abs(currentBalance) * 10000) / 10000 : 0;
-    const remainingCredit = overdraftEnabled
-      ? Math.round(Math.max(0, creditLimit - overdraftUtilized) * 10000) / 10000
-      : 0;
+    const balUnits = toBaseUnits(currentBalance);
+    const overdraftUnits = balUnits < 0n ? -balUnits : 0n;
+    const overdraftUtilized = fromBaseUnits(overdraftUnits);
+    const limitUnits = toBaseUnits(creditLimit || 0);
+    const remainingUnits = overdraftEnabled && limitUnits > overdraftUnits ? limitUnits - overdraftUnits : 0n;
+    const remainingCredit = fromBaseUnits(remainingUnits);
 
     const event = {
       id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -290,17 +297,21 @@ export class Ledger {
       );
     }
 
-    // 4. Verify exact double-entry zero sum at 4-decimal precision
-    let totalDebit = 0;
-    let totalCredit = 0;
+    // 4. Verify exact double-entry zero sum at 4-decimal precision using BigInt base units
+    let totalDebitUnits = 0n;
+    let totalCreditUnits = 0n;
     for (const entry of sanitizedEntries) {
-      if (entry.direction === 'debit') totalDebit += entry.amount;
-      else if (entry.direction === 'credit') totalCredit += entry.amount;
+      const units = toBaseUnits(entry.amount);
+      if (entry.direction === 'debit') {
+        totalDebitUnits += units;
+      } else if (entry.direction === 'credit') {
+        totalCreditUnits += units;
+      }
     }
 
-    const debitUnits = Math.round(totalDebit * 10000);
-    const creditUnits = Math.round(totalCredit * 10000);
-    if (debitUnits !== creditUnits) {
+    if (totalDebitUnits !== totalCreditUnits) {
+      const totalDebit = fromBaseUnits(totalDebitUnits);
+      const totalCredit = fromBaseUnits(totalCreditUnits);
       throw new Error(`Unbalanced transaction: debits (${totalDebit}) != credits (${totalCredit})`);
     }
 
@@ -323,30 +334,44 @@ export class Ledger {
       resolvedAccounts.push({ account: acc, entry });
     }
 
-    // 6. Pre-flight Balance & Overdraft Checks (Atomic Evaluation via Net Aggregated Delta)
-    const accountNetDeltas = new Map();
+    // 6. Pre-flight Balance & Overdraft Checks (Atomic Evaluation via Net Aggregated Delta in Base Units)
+    const accountNetDeltaUnits = new Map();
     for (const { account, entry } of resolvedAccounts) {
-      const currentDelta = accountNetDeltas.get(account) || 0;
-      let delta = 0;
+      const currentDeltaUnits = accountNetDeltaUnits.get(account) || 0n;
+      const entryUnits = toBaseUnits(entry.amount);
+      let deltaUnits = 0n;
       if (account.isDebitNormal()) {
-        delta = entry.direction === 'debit' ? entry.amount : -entry.amount;
+        deltaUnits = entry.direction === 'debit' ? entryUnits : -entryUnits;
       } else {
-        delta = entry.direction === 'credit' ? entry.amount : -entry.amount;
+        deltaUnits = entry.direction === 'credit' ? entryUnits : -entryUnits;
       }
-      accountNetDeltas.set(account, currentDelta + delta);
+      accountNetDeltaUnits.set(account, currentDeltaUnits + deltaUnits);
     }
 
-    for (const [account, netDelta] of accountNetDeltas.entries()) {
-      const finalBalance = Math.round((account.balance + netDelta) * 10000) / 10000;
-      validatePrecision(finalBalance, 'Resulting balance');
+    for (const [account, netDeltaUnits] of accountNetDeltaUnits.entries()) {
+      const currentBalanceUnits = toBaseUnits(account.balance);
+      const finalBalanceUnits = currentBalanceUnits + netDeltaUnits;
 
-      if (finalBalance < 0) {
-        const creditLimit = account.creditLimit || 0;
-        const effectiveLimit = account.overdraftEnabled ? creditLimit : 0;
-        const overdraftAllowed = account.overdraftEnabled && finalBalance >= -creditLimit;
+      if (finalBalanceUnits > MAX_SAFE_UNITS || finalBalanceUnits < -MAX_SAFE_UNITS) {
+        throw new InvalidPrecisionError(
+          `Resulting balance exceeds maximum safe integer monetary limit of ${MAX_SAFE_AMOUNT}`
+        );
+      }
+
+      const finalBalance = fromBaseUnits(finalBalanceUnits);
+      const netDelta = fromBaseUnits(netDeltaUnits);
+
+      if (finalBalanceUnits < 0n) {
+        const creditLimitUnits = toBaseUnits(account.creditLimit || 0);
+        const effectiveLimitUnits = account.overdraftEnabled ? creditLimitUnits : 0n;
+        const overdraftAllowed = account.overdraftEnabled && finalBalanceUnits >= -creditLimitUnits;
 
         if (!overdraftAllowed) {
-          const excessAmount = Math.round((Math.abs(finalBalance) - effectiveLimit) * 10000) / 10000;
+          const excessUnits = (-finalBalanceUnits) - effectiveLimitUnits;
+          const excessAmount = fromBaseUnits(excessUnits > 0n ? excessUnits : 0n);
+          const creditLimit = account.creditLimit || 0;
+          const requestedAmount = fromBaseUnits(netDeltaUnits < 0n ? -netDeltaUnits : netDeltaUnits);
+
           this._emitAuditEvent({
             tenantId,
             accountId: account.id,
@@ -355,20 +380,20 @@ export class Ledger {
             currentBalance: account.balance,
             creditLimit,
             details: {
-              requestedAmount: Math.round(Math.abs(netDelta) * 10000) / 10000,
+              requestedAmount,
               potentialBalance: finalBalance,
               excessAmount
             }
           });
 
           const err = new InsufficientFundsError(
-            `Insufficient funds: account ${account.id} balance is ${account.balance}, creditLimit is ${creditLimit}, requested ${Math.round(Math.abs(netDelta) * 10000) / 10000}`
+            `Insufficient funds: account ${account.id} balance is ${account.balance}, creditLimit is ${creditLimit}, requested ${requestedAmount}`
           );
           err.tenantId = tenantId;
           err.accountId = account.id;
           err.currentBalance = account.balance;
           err.creditLimit = creditLimit;
-          err.requestedAmount = Math.round(Math.abs(netDelta) * 10000) / 10000;
+          err.requestedAmount = requestedAmount;
           throw err;
         }
       }
@@ -384,24 +409,30 @@ export class Ledger {
     const auditEventsSnapshotLength = this.auditEvents.length;
 
     let txOverdraftUtilized = false;
-    let maxOverdraftAmount = 0;
-    let minRemainingCredit = Infinity;
+    let maxOverdraftUnits = 0n;
+    let minRemainingCreditUnits = null;
 
     try {
       for (const { account, entry } of resolvedAccounts) {
+        const priorUnits = toBaseUnits(account.balance);
         const priorBalance = account.balance;
         account.applyEntry(entry.amount, entry.direction);
         const newBalance = account.balance;
+        const newUnits = toBaseUnits(newBalance);
 
-        // Overdraft telemetry tracking
-        if (newBalance < 0) {
-          const overdraftUtilizedOrDeepened = priorBalance >= 0 || newBalance < priorBalance;
+        // Overdraft telemetry tracking using base units
+        if (newUnits < 0n) {
+          const overdraftUtilizedOrDeepened = priorUnits >= 0n || newUnits < priorUnits;
           if (overdraftUtilizedOrDeepened) {
             txOverdraftUtilized = true;
-            const currentOverdraft = Math.abs(newBalance);
-            if (currentOverdraft > maxOverdraftAmount) maxOverdraftAmount = currentOverdraft;
-            const remCredit = account.getRemainingCredit();
-            if (remCredit < minRemainingCredit) minRemainingCredit = remCredit;
+            const currentOverdraftUnits = -newUnits;
+            if (currentOverdraftUnits > maxOverdraftUnits) {
+              maxOverdraftUnits = currentOverdraftUnits;
+            }
+            const remCreditUnits = toBaseUnits(account.getRemainingCredit());
+            if (minRemainingCreditUnits === null || remCreditUnits < minRemainingCreditUnits) {
+              minRemainingCreditUnits = remCreditUnits;
+            }
 
             // Transition: NORMAL -> OVERDRAFT or Deepened Overdraft
             this._emitAuditEvent({
@@ -413,7 +444,7 @@ export class Ledger {
               creditLimit: account.creditLimit,
               details: {
                 priorBalance,
-                delta: Math.round((newBalance - priorBalance) * 10000) / 10000,
+                delta: fromBaseUnits(newUnits - priorUnits),
                 utilizationRatio: account.getOverdraftUtilizationRatio()
               }
             });
@@ -435,7 +466,7 @@ export class Ledger {
                 }
               });
             }
-          } else if (newBalance > priorBalance) {
+          } else if (newUnits > priorUnits) {
             // Transition: Partial Overdraft Repayment
             this._emitAuditEvent({
               tenantId,
@@ -446,11 +477,11 @@ export class Ledger {
               creditLimit: account.creditLimit,
               details: {
                 priorBalance,
-                repaidPortion: Math.round((newBalance - priorBalance) * 10000) / 10000
+                repaidPortion: fromBaseUnits(newUnits - priorUnits)
               }
             });
           }
-        } else if (priorBalance < 0 && newBalance >= 0) {
+        } else if (priorUnits < 0n && newUnits >= 0n) {
           // Transition: OVERDRAFT -> NORMAL (Full Clearance)
           this._emitAuditEvent({
             tenantId,
@@ -461,7 +492,7 @@ export class Ledger {
             creditLimit: account.creditLimit,
             details: {
               priorBalance,
-              clearedDeficit: Math.abs(priorBalance),
+              clearedDeficit: fromBaseUnits(-priorUnits),
               creditDeposit: entry.amount
             }
           });
@@ -478,8 +509,8 @@ export class Ledger {
         status: 'POSTED',
         ...(txOverdraftUtilized && {
           overdraftUtilized: true,
-          overdraftAmount: maxOverdraftAmount,
-          remainingCredit: minRemainingCredit
+          overdraftAmount: fromBaseUnits(maxOverdraftUnits),
+          remainingCredit: minRemainingCreditUnits !== null ? fromBaseUnits(minRemainingCreditUnits) : 0
         })
       };
 

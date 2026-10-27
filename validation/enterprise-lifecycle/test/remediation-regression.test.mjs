@@ -867,3 +867,80 @@ test('REGRESSION: DEFECT-IRONCLAD-017 - Monetary safe integer boundary enforceme
   // Prior balance intact
   assert.equal(safeAccount.balance, MAX_SAFE_AMOUNT);
 });
+
+// ============================================================================
+// DEFECT-IRONCLAD-018: Multi-Entry Aggregate Monetary Conservation Loophole
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-018 - Multi-entry aggregate floating point summation accepts unbalanced transaction', () => {
+  const ledger = new Ledger();
+  const ast1 = ledger.createAccount({ id: 'ast1', tenantId: 't18', type: 'asset', currency: 'USD' });
+  const ast2 = ledger.createAccount({ id: 'ast2', tenantId: 't18', type: 'asset', currency: 'USD' });
+  const ast3 = ledger.createAccount({ id: 'ast3', tenantId: 't18', type: 'asset', currency: 'USD' });
+  const rev1 = ledger.createAccount({ id: 'rev1', tenantId: 't18', type: 'revenue', currency: 'USD' });
+  const rev2 = ledger.createAccount({ id: 'rev2', tenantId: 't18', type: 'revenue', currency: 'USD' });
+
+  // Baseline balances are all strictly zero
+  assert.equal(ast1.balance, 0);
+  assert.equal(ast2.balance, 0);
+  assert.equal(ast3.balance, 0);
+  assert.equal(rev1.balance, 0);
+  assert.equal(rev2.balance, 0);
+  assert.equal(ledger.auditEvents.length, 0);
+
+  // Five-entry transaction reproducing exact issue #13 payload
+  // 3 debits: MAX_SAFE_AMOUNT, MAX_SAFE_AMOUNT, 0.0001
+  // 2 credits: MAX_SAFE_AMOUNT, MAX_SAFE_AMOUNT
+  // Net discrepancy: +0.0001 (+1 base unit)
+  const txPayload = {
+    id: 'tx_ironclad_018_repro',
+    tenantId: 't18',
+    idempotencyKey: 'idem_ironclad_018',
+    description: 'Mathematically unbalanced transaction exceeding floating-point accumulator precision',
+    entries: [
+      { accountId: 'ast1', direction: 'debit', amount: MAX_SAFE_AMOUNT },
+      { accountId: 'ast2', direction: 'debit', amount: MAX_SAFE_AMOUNT },
+      { accountId: 'ast3', direction: 'debit', amount: 0.0001 },
+      { accountId: 'rev1', direction: 'credit', amount: MAX_SAFE_AMOUNT },
+      { accountId: 'rev2', direction: 'credit', amount: MAX_SAFE_AMOUNT }
+    ]
+  };
+
+  // Assert that it now throws Error ("Unbalanced transaction")
+  assert.throws(
+    () => {
+      ledger.postTransaction(txPayload);
+    },
+    (err) => err instanceof Error && /Unbalanced transaction/i.test(err.message)
+  );
+
+  // Assert complete zero-state rollback:
+  // All 5 account balances strictly 0
+  assert.equal(ast1.balance, 0, 'ast1 balance must remain strictly 0');
+  assert.equal(ast2.balance, 0, 'ast2 balance must remain strictly 0');
+  assert.equal(ast3.balance, 0, 'ast3 balance must remain strictly 0');
+  assert.equal(rev1.balance, 0, 'rev1 balance must remain strictly 0');
+  assert.equal(rev2.balance, 0, 'rev2 balance must remain strictly 0');
+
+  // Records zero audit events
+  assert.equal(ledger.auditEvents.length, 0, 'Zero audit events recorded');
+
+  // Stores no transaction record
+  assert.equal(ledger.getTransaction('t18', 'tx_ironclad_018_repro'), null, 'Transaction must not be stored');
+
+  // Stores no idempotency record
+  assert.equal(ledger.idempotencyIndex.has('t18:idem_ironclad_018'), false, 'Idempotency record must not be stored');
+
+  // Verify that reusing idempotency key for subsequent valid transaction succeeds without conflict
+  const subsequentValidTx = ledger.postTransaction({
+    id: 'tx_ironclad_018_valid',
+    tenantId: 't18',
+    idempotencyKey: 'idem_ironclad_018',
+    entries: [
+      { accountId: 'ast1', direction: 'debit', amount: 50.0000 },
+      { accountId: 'rev1', direction: 'credit', amount: 50.0000 }
+    ]
+  });
+  assert.equal(subsequentValidTx.status, 'POSTED');
+  assert.equal(ast1.balance, 50.0000);
+  assert.equal(rev1.balance, 50.0000);
+});
