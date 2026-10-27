@@ -40,5 +40,5 @@ jobs:
           git log --graph --oneline --all
           RESTORED_SHA=$(git rev-parse HEAD)
           echo "Restored Commit SHA: $RESTORED_SHA"
-          test "$RESTORED_SHA" = "4992a1aa754c4de5dcb5ced0abe3ee4f17edd720"
+          test "$RESTORED_SHA" = "aa5dca558fac8f3601640aefd4fdc1fb2be90903"
           npm test

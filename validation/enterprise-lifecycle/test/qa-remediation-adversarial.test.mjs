@@ -11,7 +11,8 @@ import {
   MAX_SAFE_AMOUNT,
   MAX_SAFE_UNITS,
   toBaseUnits,
-  fromBaseUnits
+  fromBaseUnits,
+  isExactFloat
 } from '../src/index.mjs';
 
 // ============================================================================
@@ -1454,4 +1455,673 @@ test('QA-ADV-19: Idempotency replay with exact BigInt payloads: deterministic re
   assert.equal(accA.balance, MAX_SAFE_AMOUNT);
   assert.equal(accB.balance, MAX_SAFE_AMOUNT);
   assert.equal(ledger.auditEvents.length, auditCountAfterPost);
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-019 ADVERSARIAL SUITE: BIGINT BALANCE CONSERVATION & INTEGRITY
+// ============================================================================
+
+test('QA-ADV-20: Balance sheet global invariant verification across 100 consecutive transactions', () => {
+  const ledger = new Ledger();
+  const TENANT = 'tenant_adv20';
+
+  // Accounts across standard balance sheet categories:
+  // Assets (debit-normal): cash, reserves, receivables
+  // Liabilities (credit-normal): deposits, payables
+  // Equity (credit-normal): capital, retained
+  const cash = ledger.createAccount({ id: 'cash', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const reserves = ledger.createAccount({ id: 'reserves', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const receivables = ledger.createAccount({ id: 'receivables', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+
+  const deposits = ledger.createAccount({ id: 'deposits', tenantId: TENANT, type: 'liability', creditLimit: 100000 });
+  const payables = ledger.createAccount({ id: 'payables', tenantId: TENANT, type: 'liability', creditLimit: 100000 });
+
+  const capital = ledger.createAccount({ id: 'capital', tenantId: TENANT, type: 'equity', creditLimit: 100000 });
+  const retained = ledger.createAccount({ id: 'retained', tenantId: TENANT, type: 'equity', creditLimit: 100000 });
+
+  const allAccounts = [cash, reserves, receivables, deposits, payables, capital, retained];
+
+  function verifyGlobalInvariant(step) {
+    const sumAssets = cash.balanceUnits + reserves.balanceUnits + receivables.balanceUnits;
+    const sumLiabilities = deposits.balanceUnits + payables.balanceUnits;
+    const sumEquity = capital.balanceUnits + retained.balanceUnits;
+    const invariantDelta = sumAssets - sumLiabilities - sumEquity;
+
+    assert.equal(
+      invariantDelta,
+      0n,
+      `Accounting equation violated at step ${step}: Assets (${sumAssets}) - Liab (${sumLiabilities}) - Equity (${sumEquity}) !== 0n`
+    );
+
+    // Verify toBaseUnits recovery from balance and formattedBalance
+    for (const acc of allAccounts) {
+      assert.equal(toBaseUnits(acc.balance), acc.balanceUnits, `Account ${acc.id} balance mismatch at step ${step}`);
+      assert.equal(toBaseUnits(acc.formattedBalance), acc.balanceUnits, `Account ${acc.id} formattedBalance mismatch at step ${step}`);
+    }
+  }
+
+  // Step 0: Initial verification
+  verifyGlobalInvariant(0);
+
+  // Step 1: Initial high-magnitude capitalization (> 900,000,000,000)
+  // Debit Cash 900000000000.5992, Credit Capital 900000000000.5992
+  ledger.postTransaction({
+    id: 'tx_adv20_1',
+    tenantId: TENANT,
+    description: 'High magnitude initial capitalization (> 900B)',
+    entries: [
+      { accountId: 'cash', amount: 900000000000.5992, direction: 'debit' },
+      { accountId: 'capital', amount: 900000000000.5992, direction: 'credit' }
+    ]
+  });
+  verifyGlobalInvariant(1);
+
+  // Steps 2 through 100: Consecutive transactions mixing micro-increments (0.0001, 0.0002, etc.)
+  // and multi-legged transfers across Assets, Liabilities, and Equity
+  for (let i = 2; i <= 100; i++) {
+    const txId = `tx_adv20_${i}`;
+    if (i === 50) {
+      // Step 50: Secondary large amount transfer between assets (> 500,000,000,000)
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        description: 'Large inter-asset reallocation',
+        entries: [
+          { accountId: 'cash', amount: 500000000000.0001, direction: 'credit' },
+          { accountId: 'reserves', amount: 500000000000.0001, direction: 'debit' }
+        ]
+      });
+    } else if (i === 75) {
+      // Step 75: Secondary large amount transfer back
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        description: 'Large inter-asset reallocation return',
+        entries: [
+          { accountId: 'reserves', amount: 500000000000.0001, direction: 'credit' },
+          { accountId: 'cash', amount: 500000000000.0001, direction: 'debit' }
+        ]
+      });
+    } else if (i % 6 === 0) {
+      // Micro customer deposit: Cash debit 0.0001, Deposits credit 0.0001
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'cash', amount: 0.0001, direction: 'debit' },
+          { accountId: 'deposits', amount: 0.0001, direction: 'credit' }
+        ]
+      });
+    } else if (i % 6 === 1) {
+      // Micro inter-asset transfer: Cash credit 0.0002, Reserves debit 0.0002
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'cash', amount: 0.0002, direction: 'credit' },
+          { accountId: 'reserves', amount: 0.0002, direction: 'debit' }
+        ]
+      });
+    } else if (i % 6 === 2) {
+      // 3-legged micro split: Reserves credit 0.0003, Receivables debit 0.0001, Cash debit 0.0002
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'reserves', amount: 0.0003, direction: 'credit' },
+          { accountId: 'receivables', amount: 0.0001, direction: 'debit' },
+          { accountId: 'cash', amount: 0.0002, direction: 'debit' }
+        ]
+      });
+    } else if (i % 6 === 3) {
+      // Operating expense payable: Receivables debit 0.0001, Payables credit 0.0001
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'receivables', amount: 0.0001, direction: 'debit' },
+          { accountId: 'payables', amount: 0.0001, direction: 'credit' }
+        ]
+      });
+    } else if (i % 6 === 4) {
+      // Retained earnings generation: Cash debit 0.0001, Retained credit 0.0001
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'cash', amount: 0.0001, direction: 'debit' },
+          { accountId: 'retained', amount: 0.0001, direction: 'credit' }
+        ]
+      });
+    } else {
+      // Payables settlement: Payables debit 0.0001, Cash credit 0.0001
+      ledger.postTransaction({
+        id: txId,
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'payables', amount: 0.0001, direction: 'debit' },
+          { accountId: 'cash', amount: 0.0001, direction: 'credit' }
+        ]
+      });
+    }
+    verifyGlobalInvariant(i);
+  }
+});
+
+test('QA-ADV-21: Multi-leg same-account repeated entries near precision boundaries', () => {
+  const ledger = new Ledger();
+  const TENANT = 'tenant_adv21';
+
+  const vault = ledger.createAccount({ id: 'vault', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const clearing = ledger.createAccount({ id: 'clearing', tenantId: TENANT, type: 'revenue', creditLimit: 100000 });
+
+  // 1. Initial high-magnitude seed: 900,719,925,470.0000 (9007199254700000n)
+  ledger.postTransaction({
+    id: 'tx_adv21_seed',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'vault', amount: 900719925470.0000, direction: 'debit' },
+      { accountId: 'clearing', amount: 900719925470.0000, direction: 'credit' }
+    ]
+  });
+  assert.equal(vault.balanceUnits, 9007199254700000n);
+  assert.equal(vault.balance, 900719925470);
+
+  // 2. Multi-leg transaction on vault with 8 alternating credit and debit legs
+  // Net target delta on vault: +35993n (+3.5993) to land on exact 9007199254735993n
+  // Intermediate balances never exceed MAX_SAFE_AMOUNT (900719925474.0991)
+  // Legs breakdown:
+  // Leg 1: credit 1.0000   (-10000n) -> balance 9007199254690000n
+  // Leg 2: debit 2.0000    (+20000n) -> balance 9007199254710000n
+  // Leg 3: credit 0.5000   (-5000n)  -> balance 9007199254705000n
+  // Leg 4: debit 1.5000    (+15000n) -> balance 9007199254720000n
+  // Leg 5: credit 0.0001   (-1n)     -> balance 9007199254719999n
+  // Leg 6: debit 0.0002    (+2n)     -> balance 9007199254720001n
+  // Leg 7: credit 0.0002   (-2n)     -> balance 9007199254719999n
+  // Leg 8: debit 1.5994    (+15994n) -> balance 9007199254735993n
+  // Total debits on vault: 20000n + 15000n + 2n + 15994n = 50996n (5.0996)
+  // Total credits on vault: 10000n + 5000n + 1n + 2n = 15003n (1.5003)
+  // Net delta on vault: 50996n - 15003n = +35993n (+3.5993)
+  // Offsetting credit on clearing: 3.5993 (35993n)
+  // Total credits: 15003n + 35993n = 50996n (5.0996) -> perfectly balanced
+  const txBoundary = ledger.postTransaction({
+    id: 'tx_adv21_boundary',
+    tenantId: TENANT,
+    description: 'Multi-leg alternating entries crossing into precision-loss boundary',
+    entries: [
+      { accountId: 'vault', amount: 1.0000, direction: 'credit' },
+      { accountId: 'vault', amount: 2.0000, direction: 'debit' },
+      { accountId: 'vault', amount: 0.5000, direction: 'credit' },
+      { accountId: 'vault', amount: 1.5000, direction: 'debit' },
+      { accountId: 'vault', amount: 0.0001, direction: 'credit' },
+      { accountId: 'vault', amount: 0.0002, direction: 'debit' },
+      { accountId: 'vault', amount: 0.0002, direction: 'credit' },
+      { accountId: 'vault', amount: 1.5994, direction: 'debit' },
+      { accountId: 'clearing', amount: 3.5993, direction: 'credit' }
+    ]
+  });
+
+  assert.equal(txBoundary.status, 'POSTED');
+  assert.equal(vault.balanceUnits, 9007199254735993n);
+  assert.equal(vault.formattedBalance, '900719925473.5993');
+  assert.equal(vault.balance, '900719925473.5993');
+  assert.equal(toBaseUnits(vault.balance), 9007199254735993n);
+  assert.equal(clearing.balanceUnits, 9007199254735993n);
+  assert.equal(toBaseUnits(clearing.balance), 9007199254735993n);
+  assert.equal(vault.balanceUnits - clearing.balanceUnits, 0n);
+
+  // 3. Multi-leg transaction bringing vault back down below precision boundary
+  // Net credit on vault: 35993n (-3.5993)
+  // Legs:
+  // vault credit 2.0000 (20000n)
+  // vault debit 1.0000 (10000n)
+  // vault credit 2.5993 (25993n)
+  // clearing debit 3.5993 (35993n)
+  // Total debits: 10000n + 35993n = 45993n (4.5993)
+  // Total credits: 20000n + 25993n = 45993n (4.5993)
+  const txReturn = ledger.postTransaction({
+    id: 'tx_adv21_return',
+    tenantId: TENANT,
+    description: 'Multi-leg alternating entries returning below precision boundary',
+    entries: [
+      { accountId: 'vault', amount: 2.0000, direction: 'credit' },
+      { accountId: 'vault', amount: 1.0000, direction: 'debit' },
+      { accountId: 'vault', amount: 2.5993, direction: 'credit' },
+      { accountId: 'clearing', amount: 3.5993, direction: 'debit' }
+    ]
+  });
+
+  assert.equal(txReturn.status, 'POSTED');
+  assert.equal(vault.balanceUnits, 9007199254700000n);
+  assert.equal(isExactFloat(vault.balanceUnits), true);
+  assert.equal(vault.balance, 900719925470);
+  assert.equal(vault.formattedBalance, '900719925470.0000');
+  assert.equal(toBaseUnits(vault.balance), 9007199254700000n);
+  assert.equal(clearing.balanceUnits, 9007199254700000n);
+  assert.equal(vault.balanceUnits - clearing.balanceUnits, 0n);
+});
+
+test('QA-ADV-22: Overdraft boundary and utilization calculations with BigInt base units', () => {
+  const ledger = new Ledger();
+  const TENANT = 'tenant_adv22';
+
+  // Create an account with a high credit limit near MAX_SAFE_AMOUNT
+  const HIGH_LIMIT = 900719925473.5992;
+  const HIGH_LIMIT_UNITS = 9007199254735992n;
+
+  const acc = ledger.createAccount({
+    id: 'adv22_overdraft_acc',
+    tenantId: TENANT,
+    type: 'asset',
+    currency: 'USD',
+    creditLimit: HIGH_LIMIT,
+    overdraftEnabled: true,
+    overdraftAlertThreshold: 0.8
+  });
+  const offset = ledger.createAccount({
+    id: 'adv22_offset',
+    tenantId: TENANT,
+    type: 'revenue',
+    currency: 'USD',
+    creditLimit: HIGH_LIMIT
+  });
+
+  // 1. Initial Zero Balance State
+  assert.equal(acc.balanceUnits, 0n);
+  assert.equal(acc.balance, 0);
+  assert.equal(acc.creditLimitUnits, HIGH_LIMIT_UNITS);
+  assert.equal(acc.getOverdraftUtilizedUnits(), 0n);
+  assert.equal(acc.getOverdraftUtilized(), 0);
+  assert.equal(acc.getRemainingCreditUnits(), HIGH_LIMIT_UNITS);
+  assert.equal(acc.getRemainingCredit(), HIGH_LIMIT);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), HIGH_LIMIT_UNITS);
+  assert.equal(acc.getAvailablePurchasingPower(), HIGH_LIMIT);
+  assert.equal(acc.getOverdraftUtilizationRatio(), 0);
+
+  // 2. Deposit into Positive Balance: 100.0000 (1000000n)
+  ledger.postTransaction({
+    id: 'tx_adv22_deposit',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'adv22_overdraft_acc', amount: 100.0000, direction: 'debit' },
+      { accountId: 'adv22_offset', amount: 100.0000, direction: 'credit' }
+    ]
+  });
+  assert.equal(acc.balanceUnits, 1000000n);
+  assert.equal(acc.balance, 100);
+  assert.equal(acc.getOverdraftUtilizedUnits(), 0n);
+  assert.equal(acc.getOverdraftUtilized(), 0);
+  assert.equal(acc.getRemainingCreditUnits(), HIGH_LIMIT_UNITS);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), HIGH_LIMIT_UNITS + 1000000n);
+  assert.equal(acc.getOverdraftUtilizationRatio(), 0);
+
+  // 3. Exact Zero Boundary Withdrawal: spend 100.0000 back to 0
+  ledger.postTransaction({
+    id: 'tx_adv22_zero_out',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'adv22_overdraft_acc', amount: 100.0000, direction: 'credit' },
+      { accountId: 'adv22_offset', amount: 100.0000, direction: 'debit' }
+    ]
+  });
+  assert.equal(acc.balanceUnits, 0n);
+  assert.equal(acc.balance, 0);
+  assert.equal(acc.getOverdraftUtilizedUnits(), 0n);
+  assert.equal(acc.getOverdraftUtilized(), 0);
+  assert.equal(acc.getRemainingCreditUnits(), HIGH_LIMIT_UNITS);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), HIGH_LIMIT_UNITS);
+
+  // 4. Micro-increment transition into overdraft: spend 0.0001 (1n)
+  ledger.postTransaction({
+    id: 'tx_adv22_micro_overdraft',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'adv22_overdraft_acc', amount: 0.0001, direction: 'credit' },
+      { accountId: 'adv22_offset', amount: 0.0001, direction: 'debit' }
+    ]
+  });
+  assert.equal(acc.balanceUnits, -1n);
+  assert.equal(acc.balance, -0.0001);
+  assert.equal(acc.formattedBalance, '-0.0001');
+  assert.equal(acc.getOverdraftUtilizedUnits(), 1n);
+  assert.equal(acc.getOverdraftUtilized(), 0.0001);
+  assert.equal(acc.getRemainingCreditUnits(), HIGH_LIMIT_UNITS - 1n);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), HIGH_LIMIT_UNITS - 1n);
+
+  // 5. Deepening overdraft to near-limit: spend 900719925473.5990 (9007199254735990n)
+  // New balanceUnits = -1n - 9007199254735990n = -9007199254735991n
+  // Remaining credit = 9007199254735992n - 9007199254735991n = 1n (0.0001)
+  ledger.postTransaction({
+    id: 'tx_adv22_deep_overdraft',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'adv22_overdraft_acc', amount: 900719925473.5990, direction: 'credit' },
+      { accountId: 'adv22_offset', amount: 900719925473.5990, direction: 'debit' }
+    ]
+  });
+  assert.equal(acc.balanceUnits, -9007199254735991n);
+  assert.equal(acc.getOverdraftUtilizedUnits(), 9007199254735991n);
+  assert.equal(acc.getRemainingCreditUnits(), 1n);
+  assert.equal(acc.getRemainingCredit(), 0.0001);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), 1n);
+  assert.equal(acc.getAvailablePurchasingPower(), 0.0001);
+
+  // 6. Breach Rejection: attempting to spend 0.0002 exceeds remaining credit (1n) by 1n (0.0001)
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_adv22_breach_fail',
+        tenantId: TENANT,
+        entries: [
+          { accountId: 'adv22_overdraft_acc', amount: 0.0002, direction: 'credit' },
+          { accountId: 'adv22_offset', amount: 0.0002, direction: 'debit' }
+        ]
+      });
+    },
+    (err) => err instanceof InsufficientFundsError && /Insufficient funds/i.test(err.message)
+  );
+  // Assert state remained untouched:
+  assert.equal(acc.balanceUnits, -9007199254735991n);
+  assert.equal(acc.getRemainingCreditUnits(), 1n);
+
+  // 7. Exact Limit Boundary: spend the exact remaining 0.0001 (1n)
+  ledger.postTransaction({
+    id: 'tx_adv22_exact_limit',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'adv22_overdraft_acc', amount: 0.0001, direction: 'credit' },
+      { accountId: 'adv22_offset', amount: 0.0001, direction: 'debit' }
+    ]
+  });
+  assert.equal(acc.balanceUnits, -HIGH_LIMIT_UNITS);
+  assert.equal(acc.getOverdraftUtilizedUnits(), HIGH_LIMIT_UNITS);
+  assert.equal(acc.getRemainingCreditUnits(), 0n);
+  assert.equal(acc.getRemainingCredit(), 0);
+  assert.equal(acc.getAvailablePurchasingPowerUnits(), 0n);
+  assert.equal(acc.getAvailablePurchasingPower(), 0);
+  assert.equal(acc.getOverdraftUtilizationRatio(), 1);
+
+  // 8. Overdraft Disabled Account Verification
+  const accDisabled = ledger.createAccount({
+    id: 'adv22_disabled_acc',
+    tenantId: TENANT,
+    type: 'asset',
+    currency: 'USD',
+    creditLimit: 0,
+    overdraftEnabled: false
+  });
+  assert.equal(accDisabled.getRemainingCreditUnits(), 0n);
+  assert.equal(accDisabled.getRemainingCredit(), 0);
+  assert.equal(accDisabled.getAvailablePurchasingPowerUnits(), 0n);
+  assert.equal(accDisabled.getAvailablePurchasingPower(), 0);
+});
+
+test('QA-ADV-23: Snapshot rollback atomicity preserves exact BigInt units on mid-transaction failure', () => {
+  const ledger = new Ledger();
+  const TENANT = 'tenant_adv23';
+
+  // Setup 4 accounts in diverse balance states:
+  // accHigh: seeded to exact 9007199254735993n (inexact float)
+  // accOverdrawn: seeded into negative overdraft
+  // accMicro: seeded to 1n (0.0001)
+  // accNormal: seeded to 100.0000 (1000000n)
+  const accHigh = ledger.createAccount({ id: 'acc_high', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const accOverdrawn = ledger.createAccount({ id: 'acc_overdrawn', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const accMicro = ledger.createAccount({ id: 'acc_micro', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const accNormal = ledger.createAccount({ id: 'acc_normal', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+
+  const fundingA = ledger.createAccount({ id: 'funding_a', tenantId: TENANT, type: 'revenue', creditLimit: 100000 });
+  const fundingB = ledger.createAccount({ id: 'funding_b', tenantId: TENANT, type: 'revenue', creditLimit: 100000 });
+
+  // Seed accHigh to 9007199254735993n
+  ledger.postTransaction({
+    id: 'tx_adv23_seed_high',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'acc_high', amount: 900719925473.5992, direction: 'debit' },
+      { accountId: 'acc_high', amount: 0.0001, direction: 'debit' },
+      { accountId: 'funding_a', amount: 900719925473.5992, direction: 'credit' },
+      { accountId: 'funding_b', amount: 0.0001, direction: 'credit' }
+    ]
+  });
+  assert.equal(accHigh.balanceUnits, 9007199254735993n);
+  assert.equal(accHigh.balance, '900719925473.5993');
+
+  // Seed accOverdrawn to -50000.0001 (-500000001n)
+  ledger.postTransaction({
+    id: 'tx_adv23_seed_overdrawn',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'acc_overdrawn', amount: 50000.0001, direction: 'credit' },
+      { accountId: 'funding_b', amount: 50000.0001, direction: 'debit' }
+    ]
+  });
+  assert.equal(accOverdrawn.balanceUnits, -500000001n);
+
+  // Seed accMicro to 0.0001 (1n)
+  ledger.postTransaction({
+    id: 'tx_adv23_seed_micro',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'acc_micro', amount: 0.0001, direction: 'debit' },
+      { accountId: 'funding_b', amount: 0.0001, direction: 'credit' }
+    ]
+  });
+  assert.equal(accMicro.balanceUnits, 1n);
+
+  // Seed accNormal to 100.0000 (1000000n)
+  ledger.postTransaction({
+    id: 'tx_adv23_seed_normal',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'acc_normal', amount: 100.0000, direction: 'debit' },
+      { accountId: 'funding_b', amount: 100.0000, direction: 'credit' }
+    ]
+  });
+  assert.equal(accNormal.balanceUnits, 1000000n);
+
+  const preTxAuditCount = ledger.auditEvents.length;
+
+  // Snapshot expected pre-transaction values
+  const preHighUnits = accHigh.balanceUnits;
+  const preHighBal = accHigh.balance;
+  const preOverdrawnUnits = accOverdrawn.balanceUnits;
+  const preOverdrawnBal = accOverdrawn.balance;
+  const preMicroUnits = accMicro.balanceUnits;
+  const preMicroBal = accMicro.balance;
+  const preNormalUnits = accNormal.balanceUnits;
+  const preNormalBal = accNormal.balance;
+
+  // Simulate mid-execution failure on accNormal in Step 7 loop:
+  // Hook applyEntry on accNormal
+  const originalApplyEntry = accNormal.applyEntry;
+  accNormal.applyEntry = function (amount, direction) {
+    throw new Error('SIMULATED_STEP7_MID_EXECUTION_FAILURE');
+  };
+
+  // Construct 4-account transaction touching accHigh, accOverdrawn, accMicro, accNormal
+  // In the execution loop, accHigh, accOverdrawn, and accMicro will execute first, mutating their balances,
+  // before accNormal throws
+  const failingTxPayload = {
+    id: 'tx_adv23_failing',
+    tenantId: TENANT,
+    idempotencyKey: 'idem_adv23_key',
+    description: 'Transaction designed to fail mid-execution on 4th entry',
+    entries: [
+      { accountId: 'acc_high', amount: 10.0000, direction: 'credit' },
+      { accountId: 'acc_overdrawn', amount: 10.0000, direction: 'credit' },
+      { accountId: 'acc_micro', amount: 10.0000, direction: 'debit' },
+      { accountId: 'acc_normal', amount: 10.0000, direction: 'debit' }
+    ]
+  };
+
+  assert.throws(
+    () => {
+      ledger.postTransaction(failingTxPayload);
+    },
+    /SIMULATED_STEP7_MID_EXECUTION_FAILURE/
+  );
+
+  // Restore applyEntry
+  accNormal.applyEntry = originalApplyEntry;
+
+  // Assert bit-for-bit exactness restored across all 4 accounts:
+  assert.equal(accHigh.balanceUnits, preHighUnits, 'accHigh balanceUnits must be bit-for-bit exact');
+  assert.equal(accHigh.balance, preHighBal, 'accHigh balance string must match exact pre-failure state');
+  assert.equal(accHigh.formattedBalance, '900719925473.5993');
+
+  assert.equal(accOverdrawn.balanceUnits, preOverdrawnUnits, 'accOverdrawn balanceUnits must be bit-for-bit exact');
+  assert.equal(accOverdrawn.balance, preOverdrawnBal);
+
+  assert.equal(accMicro.balanceUnits, preMicroUnits, 'accMicro balanceUnits must be bit-for-bit exact');
+  assert.equal(accMicro.balance, preMicroBal);
+
+  assert.equal(accNormal.balanceUnits, preNormalUnits, 'accNormal balanceUnits must be bit-for-bit exact');
+  assert.equal(accNormal.balance, preNormalBal);
+
+  // Assert ledger internal stores rolled back
+  assert.equal(ledger.auditEvents.length, preTxAuditCount, 'Audit events emitted during partial step 7 must be purged');
+  assert.equal(ledger.getTransaction(TENANT, 'tx_adv23_failing'), null, 'Transaction must not exist in store');
+  assert.equal(ledger.idempotencyIndex.has(`${TENANT}:idem_adv23_key`), false, 'Idempotency index must be deleted');
+
+  // Verify that subsequent valid transaction reusing the same id and idempotencyKey succeeds
+  const retryTx = ledger.postTransaction({
+    id: 'tx_adv23_failing',
+    tenantId: TENANT,
+    idempotencyKey: 'idem_adv23_key',
+    description: 'Retry valid transaction with same IDs',
+    entries: [
+      { accountId: 'acc_high', amount: 10.0000, direction: 'credit' },
+      { accountId: 'acc_normal', amount: 10.0000, direction: 'debit' }
+    ]
+  });
+  assert.equal(retryTx.status, 'POSTED');
+  assert.equal(accHigh.balanceUnits, preHighUnits - 100000n);
+  assert.equal(accNormal.balanceUnits, preNormalUnits + 100000n);
+});
+
+test('QA-ADV-24: Idempotency replay with high-magnitude BigInt accounts', () => {
+  const ledger = new Ledger();
+  const TENANT = 'tenant_adv24';
+
+  const payer = ledger.createAccount({ id: 'payer', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const payee = ledger.createAccount({ id: 'payee', tenantId: TENANT, type: 'asset', creditLimit: 100000 });
+  const clearing = ledger.createAccount({ id: 'clearing', tenantId: TENANT, type: 'revenue', creditLimit: 100000 });
+  const payerFunding = ledger.createAccount({ id: 'payer_funding', tenantId: TENANT, type: 'revenue', creditLimit: 100000 });
+
+  // 1. Seed payee to 900719925473.5992 (9007199254735992n)
+  ledger.postTransaction({
+    id: 'tx_adv24_seed_payee',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'payee', amount: 900719925473.5992, direction: 'debit' },
+      { accountId: 'clearing', amount: 900719925473.5992, direction: 'credit' }
+    ]
+  });
+  assert.equal(payee.balanceUnits, 9007199254735992n);
+
+  // Seed payer with 10.0000
+  ledger.postTransaction({
+    id: 'tx_adv24_seed_payer',
+    tenantId: TENANT,
+    entries: [
+      { accountId: 'payer', amount: 10.0000, direction: 'debit' },
+      { accountId: 'payer_funding', amount: 10.0000, direction: 'credit' }
+    ]
+  });
+  assert.equal(payer.balanceUnits, 100000n);
+
+  // 2. Post critical micro-transaction (0.0001) that crosses payee into exact 9007199254735993n
+  const criticalPayload = {
+    id: 'tx_adv24_canonical',
+    tenantId: TENANT,
+    idempotencyKey: 'idem_adv24_canonical_key',
+    description: 'High-magnitude boundary idempotency payload',
+    entries: [
+      { accountId: 'payer', amount: 0.0001, direction: 'credit' },
+      { accountId: 'payee', amount: 0.0001, direction: 'debit' }
+    ]
+  };
+
+  const initialTx = ledger.postTransaction(criticalPayload);
+  assert.equal(initialTx.status, 'POSTED');
+  assert.equal(payee.balanceUnits, 9007199254735993n);
+  assert.equal(payee.formattedBalance, '900719925473.5993');
+  assert.equal(payee.balance, '900719925473.5993');
+  assert.equal(payer.balanceUnits, 99999n);
+
+  const auditCountAfterInitial = ledger.auditEvents.length;
+
+  // 3. Replay with identical payload 5 times in a loop
+  for (let r = 1; r <= 5; r++) {
+    const replayed = ledger.postTransaction(criticalPayload);
+    assert.equal(replayed.status, 'POSTED');
+    assert.equal(replayed.id, initialTx.id);
+    assert.deepEqual(replayed.entries, initialTx.entries);
+
+    // Verify BigInt balances are NOT double-applied or mutated:
+    assert.equal(payee.balanceUnits, 9007199254735993n, `Replay ${r} must preserve exact payee balanceUnits`);
+    assert.equal(payee.balance, '900719925473.5993', `Replay ${r} must preserve exact payee balance string`);
+    assert.equal(payer.balanceUnits, 99999n, `Replay ${r} must preserve exact payer balanceUnits`);
+
+    // Verify audit log remains silent:
+    assert.equal(ledger.auditEvents.length, auditCountAfterInitial, `Replay ${r} must not emit audit events`);
+  }
+
+  // 4. Conflict Matrix: Attempt replay with conflicting payloads throws IdempotencyConflictError
+  // 4a. Amount discrepancy (+0.0001)
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        ...criticalPayload,
+        entries: [
+          { accountId: 'payer', amount: 0.0002, direction: 'credit' },
+          { accountId: 'payee', amount: 0.0002, direction: 'debit' }
+        ]
+      });
+    },
+    (err) => err instanceof IdempotencyConflictError && (err.code === 'IDEMPOTENCY_CONFLICT' || /Conflicting payload/i.test(err.message))
+  );
+
+  // 4b. Direction discrepancy
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        ...criticalPayload,
+        entries: [
+          { accountId: 'payer', amount: 0.0001, direction: 'debit' },
+          { accountId: 'payee', amount: 0.0001, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof IdempotencyConflictError && (err.code === 'IDEMPOTENCY_CONFLICT' || /Conflicting payload/i.test(err.message))
+  );
+
+  // 4c. Conflicting transaction ID
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        ...criticalPayload,
+        id: 'tx_adv24_different_id'
+      });
+    },
+    (err) => err instanceof IdempotencyConflictError && (err.code === 'IDEMPOTENCY_CONFLICT' || /Conflicting payload/i.test(err.message))
+  );
+
+  // 4d. Conflicting description
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        ...criticalPayload,
+        description: 'Altered description'
+      });
+    },
+    (err) => err instanceof IdempotencyConflictError && (err.code === 'IDEMPOTENCY_CONFLICT' || /Conflicting payload/i.test(err.message))
+  );
+
+  // Verify post-conflict state is 100% preserved
+  assert.equal(payee.balanceUnits, 9007199254735993n);
+  assert.equal(payee.balance, '900719925473.5993');
+  assert.equal(payer.balanceUnits, 99999n);
+  assert.equal(ledger.auditEvents.length, auditCountAfterInitial);
 });

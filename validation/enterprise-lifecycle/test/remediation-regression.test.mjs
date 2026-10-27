@@ -7,7 +7,8 @@ import {
   IdempotencyConflictError,
   DuplicateTransactionIdError,
   CurrencyMismatchError,
-  MAX_SAFE_AMOUNT
+  MAX_SAFE_AMOUNT,
+  toBaseUnits
 } from '../src/index.mjs';
 
 // ============================================================================
@@ -943,4 +944,41 @@ test('REGRESSION: DEFECT-IRONCLAD-018 - Multi-entry aggregate floating point sum
   assert.equal(subsequentValidTx.status, 'POSTED');
   assert.equal(ast1.balance, 50.0000);
   assert.equal(rev1.balance, 50.0000);
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-019: In-Memory Balance Float Round-Trip Precision Loss
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-019 - Persisted balances maintain exact BigInt units without float precision loss at high magnitude', () => {
+  const ledger = new Ledger();
+  const a = ledger.createAccount({ id: 'a', tenantId: 't19', type: 'asset', currency: 'USD' });
+  const b = ledger.createAccount({ id: 'b', tenantId: 't19', type: 'revenue', currency: 'USD' });
+  const c = ledger.createAccount({ id: 'c', tenantId: 't19', type: 'revenue', currency: 'USD' });
+
+  assert.equal(a.balance, 0);
+  assert.equal(b.balance, 0);
+  assert.equal(c.balance, 0);
+
+  // Reproduce exact scenario from GitHub Issue #14:
+  // Account 'a' has two debits: 900719925473.5992 and 0.0001.
+  // Offsetting credits on accounts 'b' (900719925473.5992) and 'c' (0.0001).
+  const tx = ledger.postTransaction({
+    id: 'tx_ironclad_019_regression',
+    tenantId: 't19',
+    description: 'DEFECT-IRONCLAD-019: Persisted balance precision preservation at high magnitude',
+    entries: [
+      { accountId: 'a', direction: 'debit', amount: 900719925473.5992 },
+      { accountId: 'a', direction: 'debit', amount: 0.0001 },
+      { accountId: 'b', direction: 'credit', amount: 900719925473.5992 },
+      { accountId: 'c', direction: 'credit', amount: 0.0001 }
+    ]
+  });
+
+  assert.equal(tx.status, 'POSTED');
+  assert.equal(a.balanceUnits, 9007199254735993n);
+  assert.equal(a.formattedBalance, '900719925473.5993');
+  assert.equal(a.balance, '900719925473.5993');
+  assert.equal(toBaseUnits(a.balance), 9007199254735993n);
+  assert.equal(toBaseUnits(a.balance) - toBaseUnits(b.balance) - toBaseUnits(c.balance), 0n);
+  assert.equal(a.balanceUnits - b.balanceUnits - c.balanceUnits, 0n);
 });

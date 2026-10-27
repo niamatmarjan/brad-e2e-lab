@@ -4,7 +4,10 @@ export {
   MAX_SAFE_AMOUNT,
   MAX_SAFE_UNITS,
   toBaseUnits,
-  fromBaseUnits
+  fromBaseUnits,
+  isExactFloat,
+  parseDecimalToBaseUnits,
+  baseUnitsToDecimalString
 } from './account.mjs';
 export {
   Ledger,

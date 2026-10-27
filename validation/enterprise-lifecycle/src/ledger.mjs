@@ -5,7 +5,10 @@ import {
   MAX_SAFE_UNITS,
   toBaseUnits,
   fromBaseUnits,
-  validatePrecision
+  validatePrecision,
+  isExactFloat,
+  parseDecimalToBaseUnits,
+  baseUnitsToDecimalString
 } from './account.mjs';
 
 export {
@@ -13,7 +16,10 @@ export {
   MAX_SAFE_AMOUNT,
   MAX_SAFE_UNITS,
   toBaseUnits,
-  fromBaseUnits
+  fromBaseUnits,
+  isExactFloat,
+  parseDecimalToBaseUnits,
+  baseUnitsToDecimalString
 };
 
 export class IdempotencyConflictError extends Error {
@@ -122,6 +128,7 @@ export class Ledger {
       throw new Error(`Account ${accountId} not found for tenant ${tenantId}`);
     }
     const previousCreditLimit = account.creditLimit;
+    const previousCreditLimitUnits = account.creditLimitUnits;
     const previousOverdraftEnabled = account.overdraftEnabled;
     const previousOverdraftAlertThreshold = account.overdraftAlertThreshold;
     const auditEventsSnapshotLength = this.auditEvents.length;
@@ -144,7 +151,7 @@ export class Ledger {
         }
       });
     } catch (err) {
-      account.creditLimit = previousCreditLimit;
+      account.creditLimitUnits = previousCreditLimitUnits;
       account.overdraftEnabled = previousOverdraftEnabled;
       account.overdraftAlertThreshold = previousOverdraftAlertThreshold;
       this.auditEvents.length = auditEventsSnapshotLength;
@@ -171,10 +178,10 @@ export class Ledger {
   _emitAuditEvent({ tenantId, accountId, transactionId, type, currentBalance, creditLimit, details = {} }) {
     const account = this.getAccount(tenantId, accountId);
     const overdraftEnabled = account ? account.overdraftEnabled : false;
-    const balUnits = toBaseUnits(currentBalance);
+    const balUnits = account ? account.balanceUnits : toBaseUnits(currentBalance);
     const overdraftUnits = balUnits < 0n ? -balUnits : 0n;
     const overdraftUtilized = fromBaseUnits(overdraftUnits);
-    const limitUnits = toBaseUnits(creditLimit || 0);
+    const limitUnits = account ? account.creditLimitUnits : toBaseUnits(creditLimit || 0);
     const remainingUnits = overdraftEnabled && limitUnits > overdraftUnits ? limitUnits - overdraftUnits : 0n;
     const remainingCredit = fromBaseUnits(remainingUnits);
 
@@ -349,7 +356,7 @@ export class Ledger {
     }
 
     for (const [account, netDeltaUnits] of accountNetDeltaUnits.entries()) {
-      const currentBalanceUnits = toBaseUnits(account.balance);
+      const currentBalanceUnits = account.balanceUnits;
       const finalBalanceUnits = currentBalanceUnits + netDeltaUnits;
 
       if (finalBalanceUnits > MAX_SAFE_UNITS || finalBalanceUnits < -MAX_SAFE_UNITS) {
@@ -362,7 +369,7 @@ export class Ledger {
       const netDelta = fromBaseUnits(netDeltaUnits);
 
       if (finalBalanceUnits < 0n) {
-        const creditLimitUnits = toBaseUnits(account.creditLimit || 0);
+        const creditLimitUnits = account.creditLimitUnits;
         const effectiveLimitUnits = account.overdraftEnabled ? creditLimitUnits : 0n;
         const overdraftAllowed = account.overdraftEnabled && finalBalanceUnits >= -creditLimitUnits;
 
@@ -403,7 +410,7 @@ export class Ledger {
     const balanceSnapshots = new Map();
     for (const { account } of resolvedAccounts) {
       if (!balanceSnapshots.has(account)) {
-        balanceSnapshots.set(account, account.balance);
+        balanceSnapshots.set(account, account.balanceUnits);
       }
     }
     const auditEventsSnapshotLength = this.auditEvents.length;
@@ -414,11 +421,11 @@ export class Ledger {
 
     try {
       for (const { account, entry } of resolvedAccounts) {
-        const priorUnits = toBaseUnits(account.balance);
+        const priorUnits = account.balanceUnits;
         const priorBalance = account.balance;
         account.applyEntry(entry.amount, entry.direction);
         const newBalance = account.balance;
-        const newUnits = toBaseUnits(newBalance);
+        const newUnits = account.balanceUnits;
 
         // Overdraft telemetry tracking using base units
         if (newUnits < 0n) {
@@ -429,7 +436,7 @@ export class Ledger {
             if (currentOverdraftUnits > maxOverdraftUnits) {
               maxOverdraftUnits = currentOverdraftUnits;
             }
-            const remCreditUnits = toBaseUnits(account.getRemainingCredit());
+            const remCreditUnits = account.getRemainingCreditUnits();
             if (minRemainingCreditUnits === null || remCreditUnits < minRemainingCreditUnits) {
               minRemainingCreditUnits = remCreditUnits;
             }
@@ -530,8 +537,8 @@ export class Ledger {
 
       return result;
     } catch (err) {
-      for (const [acc, origBal] of balanceSnapshots.entries()) {
-        acc.balance = origBal;
+      for (const [acc, origBalUnits] of balanceSnapshots.entries()) {
+        acc.balanceUnits = origBalUnits;
       }
       this.auditEvents.length = auditEventsSnapshotLength;
       this.transactions.delete(txKey);
