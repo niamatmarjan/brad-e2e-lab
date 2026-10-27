@@ -64,7 +64,7 @@ test('Ledger: enforces idempotency keys preventing duplicate postings', () => {
 
   // Replay same idempotency key returns original transaction without double-debiting
   const tx2 = ledger.postTransaction({
-    id: 'tx_idem_2',
+    id: 'tx_idem_1',
     tenantId: 'acme',
     idempotencyKey: 'idem_key_001',
     entries: [
@@ -75,6 +75,22 @@ test('Ledger: enforces idempotency keys preventing duplicate postings', () => {
 
   assert.equal(tx1.id, tx2.id);
   assert.equal(ledger.getAccount('acme', 'cash').balance, 50);
+
+  // Replaying with a different transaction ID must throw IdempotencyConflictError (DEFECT-IRONCLAD-014)
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_idem_2',
+        tenantId: 'acme',
+        idempotencyKey: 'idem_key_001',
+        entries: [
+          { accountId: 'cash', amount: 50, direction: 'debit' },
+          { accountId: 'capital', amount: 50, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err.code === 'IDEMPOTENCY_CONFLICT' || err.name === 'IdempotencyConflictError'
+  );
 });
 
 test('Ledger: rejects transaction when balance is insufficient and creditLimit is 0', () => {

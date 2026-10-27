@@ -1,6 +1,6 @@
-import { Account, InvalidPrecisionError } from './account.mjs';
+import { Account, InvalidPrecisionError, MAX_SAFE_AMOUNT } from './account.mjs';
 
-export { InvalidPrecisionError };
+export { InvalidPrecisionError, MAX_SAFE_AMOUNT };
 
 export class IdempotencyConflictError extends Error {
   constructor(message = 'Idempotency key reused with conflicting transaction payload') {
@@ -41,12 +41,19 @@ function validateDelimiter(val, name) {
 }
 
 function validatePrecision(val, name) {
+  if (Math.abs(val * 10000) > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(Math.round(Math.abs(val * 10000)))) {
+    throw new InvalidPrecisionError(`${name} exceeds maximum safe integer monetary limit of ${MAX_SAFE_AMOUNT}`);
+  }
   if (Math.abs(val * 10000 - Math.round(val * 10000)) >= 1e-9) {
     throw new InvalidPrecisionError(`${name} exceeds maximum precision of 4 decimal places`);
   }
 }
 
 function payloadsMatch(storedPayload, incoming) {
+  const storedId = storedPayload.id ?? storedPayload.txId;
+  if (incoming.id !== storedId) {
+    return false;
+  }
   if ((incoming.description || '') !== (storedPayload.description || '')) {
     return false;
   }
@@ -110,21 +117,34 @@ export class Ledger {
       throw new Error(`Account ${accountId} not found for tenant ${tenantId}`);
     }
     const previousCreditLimit = account.creditLimit;
+    const previousOverdraftEnabled = account.overdraftEnabled;
+    const previousOverdraftAlertThreshold = account.overdraftAlertThreshold;
+    const auditEventsSnapshotLength = this.auditEvents.length;
+
     account.updatePolicy(policy);
-    return this._emitAuditEvent({
-      tenantId,
-      accountId: account.id,
-      transactionId: `config_${Date.now()}`,
-      type: 'OVERDRAFT_CONFIG_UPDATED',
-      currentBalance: account.balance,
-      creditLimit: account.creditLimit,
-      details: {
-        previousCreditLimit,
-        newCreditLimit: account.creditLimit,
-        overdraftEnabled: account.overdraftEnabled,
-        overdraftAlertThreshold: account.overdraftAlertThreshold
-      }
-    });
+
+    try {
+      return this._emitAuditEvent({
+        tenantId,
+        accountId: account.id,
+        transactionId: `config_${Date.now()}`,
+        type: 'OVERDRAFT_CONFIG_UPDATED',
+        currentBalance: account.balance,
+        creditLimit: account.creditLimit,
+        details: {
+          previousCreditLimit,
+          newCreditLimit: account.creditLimit,
+          overdraftEnabled: account.overdraftEnabled,
+          overdraftAlertThreshold: account.overdraftAlertThreshold
+        }
+      });
+    } catch (err) {
+      account.creditLimit = previousCreditLimit;
+      account.overdraftEnabled = previousOverdraftEnabled;
+      account.overdraftAlertThreshold = previousOverdraftAlertThreshold;
+      this.auditEvents.length = auditEventsSnapshotLength;
+      throw err;
+    }
   }
 
   updateAccount(tenantId, accountId, policy = {}) {
@@ -187,10 +207,27 @@ export class Ledger {
     }
 
     // 1. Validate all entry structures, amounts, and tenant boundaries
+    const sanitizedEntries = [];
     for (const entry of entries) {
-      if (!entry || typeof entry !== 'object') {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
         throw new TypeError('Transaction entry must be an object');
       }
+
+      for (const key of Object.getOwnPropertyNames(entry)) {
+        const val = entry[key];
+        if (typeof val === 'function' || typeof val === 'symbol' || (typeof val === 'object' && val !== null)) {
+          throw new TypeError(`Entry property "${key}" must be a primitive value`);
+        }
+      }
+      if (Object.getOwnPropertySymbols(entry).length > 0) {
+        throw new TypeError('Transaction entry must not contain symbol properties');
+      }
+      try {
+        structuredClone(entry);
+      } catch (err) {
+        throw new TypeError(`Transaction entry cannot be cloned: ${err.message}`);
+      }
+
       if (!entry.accountId || typeof entry.accountId !== 'string' || entry.accountId.trim().length === 0) {
         throw new TypeError('entry accountId must be non-empty string');
       }
@@ -216,13 +253,24 @@ export class Ledger {
       if (entry.direction !== 'debit' && entry.direction !== 'credit') {
         throw new TypeError('Invalid direction, must be debit or credit');
       }
+
+      const sanitized = {
+        accountId: entry.accountId,
+        amount: entry.amount,
+        direction: entry.direction
+      };
+      if (entry.tenantId !== undefined && entry.tenantId !== null) {
+        sanitized.tenantId = entry.tenantId;
+      }
+      sanitizedEntries.push(sanitized);
     }
 
     // 2. Check idempotency
-    if (idempotencyKey) {
-      const existingRecord = this.idempotencyIndex.get(`${tenantId}:${idempotencyKey}`);
+    const idempKey = idempotencyKey ? `${tenantId}:${idempotencyKey}` : null;
+    if (idempKey) {
+      const existingRecord = this.idempotencyIndex.get(idempKey);
       if (existingRecord) {
-        if (!payloadsMatch(existingRecord.payload, { id, description, entries })) {
+        if (!payloadsMatch(existingRecord.payload, { id, description, entries: sanitizedEntries })) {
           throw new IdempotencyConflictError(
             `Conflicting payload on idempotency key replay: key "${idempotencyKey}" for tenant "${tenantId}"`
           );
@@ -245,7 +293,7 @@ export class Ledger {
     // 4. Verify exact double-entry zero sum at 4-decimal precision
     let totalDebit = 0;
     let totalCredit = 0;
-    for (const entry of entries) {
+    for (const entry of sanitizedEntries) {
       if (entry.direction === 'debit') totalDebit += entry.amount;
       else if (entry.direction === 'credit') totalCredit += entry.amount;
     }
@@ -260,7 +308,7 @@ export class Ledger {
     const resolvedAccounts = [];
     let transactionCurrency = null;
 
-    for (const entry of entries) {
+    for (const entry of sanitizedEntries) {
       const acc = this.getAccount(tenantId, entry.accountId);
       if (!acc) {
         throw new Error(`Account ${entry.accountId} not found for tenant ${tenantId}`);
@@ -290,6 +338,8 @@ export class Ledger {
 
     for (const [account, netDelta] of accountNetDeltas.entries()) {
       const finalBalance = Math.round((account.balance + netDelta) * 10000) / 10000;
+      validatePrecision(finalBalance, 'Resulting balance');
+
       if (finalBalance < 0) {
         const creditLimit = account.creditLimit || 0;
         const effectiveLimit = account.overdraftEnabled ? creditLimit : 0;
@@ -424,7 +474,7 @@ export class Ledger {
         idempotencyKey: idempotencyKey || null,
         timestamp,
         description,
-        entries: entries.map(e => ({ ...e })),
+        entries: sanitizedEntries.map(e => ({ ...e })),
         status: 'POSTED',
         ...(txOverdraftUtilized && {
           overdraftUtilized: true,
@@ -433,29 +483,30 @@ export class Ledger {
         })
       };
 
+      const result = structuredClone(txRecord);
+
       this.transactions.set(txKey, txRecord);
-      if (idempotencyKey) {
-        this.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, {
+      if (idempKey) {
+        this.idempotencyIndex.set(idempKey, {
           txId: id,
           payload: {
             id,
             description: description || '',
-            entries: entries.map(e => ({
-              accountId: e.accountId,
-              amount: e.amount,
-              direction: e.direction,
-              ...(e.tenantId ? { tenantId: e.tenantId } : {})
-            }))
+            entries: sanitizedEntries.map(e => ({ ...e }))
           }
         });
       }
 
-      return structuredClone(txRecord);
+      return result;
     } catch (err) {
       for (const [acc, origBal] of balanceSnapshots.entries()) {
         acc.balance = origBal;
       }
       this.auditEvents.length = auditEventsSnapshotLength;
+      this.transactions.delete(txKey);
+      if (idempKey) {
+        this.idempotencyIndex.delete(idempKey);
+      }
       throw err;
     }
   }

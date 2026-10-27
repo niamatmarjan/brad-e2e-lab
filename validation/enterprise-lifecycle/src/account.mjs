@@ -6,6 +6,8 @@ export class InvalidPrecisionError extends RangeError {
   }
 }
 
+export const MAX_SAFE_AMOUNT = Number.MAX_SAFE_INTEGER / 10000;
+
 function validateDelimiter(val, name) {
   if (typeof val === 'string' && val.includes(':')) {
     throw new TypeError(`${name} must not contain delimiter ":"`);
@@ -13,6 +15,9 @@ function validateDelimiter(val, name) {
 }
 
 function validatePrecision(val, name) {
+  if (Math.abs(val * 10000) > Number.MAX_SAFE_INTEGER || !Number.isSafeInteger(Math.round(Math.abs(val * 10000)))) {
+    throw new InvalidPrecisionError(`${name} exceeds maximum safe integer monetary limit of ${MAX_SAFE_AMOUNT}`);
+  }
   if (Math.abs(val * 10000 - Math.round(val * 10000)) >= 1e-9) {
     throw new InvalidPrecisionError(`${name} exceeds maximum precision of 4 decimal places`);
   }
@@ -149,19 +154,23 @@ export class Account {
       throw new TypeError('Direction must be either debit or credit');
     }
 
+    const priorBalance = this.balance;
+    let nextBalance = priorBalance;
     if (this.isDebitNormal()) {
       if (direction === 'debit') {
-        this.balance += amount;
+        nextBalance += amount;
       } else {
-        this.balance -= amount;
+        nextBalance -= amount;
       }
     } else {
       if (direction === 'credit') {
-        this.balance += amount;
+        nextBalance += amount;
       } else {
-        this.balance -= amount;
+        nextBalance -= amount;
       }
     }
-    this.balance = Math.round(this.balance * 10000) / 10000;
+    nextBalance = Math.round(nextBalance * 10000) / 10000;
+    validatePrecision(nextBalance, 'Resulting balance');
+    this.balance = nextBalance;
   }
 }

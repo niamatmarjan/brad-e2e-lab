@@ -27,6 +27,9 @@ jobs:
           git config --global user.email "ci-runner@example.com"
       - name: Run Lab & Resilience Test Suite
         run: node --test
+      - name: Verify apex-ledger.bundle SHA-256 Digest Manifest
+        run: |
+          sha256sum -c validation/enterprise-lifecycle/apex-ledger.bundle.sha256
       - name: Verify apex-ledger.bundle Integrity & Complete History
         run: |
           git bundle verify validation/enterprise-lifecycle/apex-ledger.bundle
@@ -35,4 +38,7 @@ jobs:
           git clone validation/enterprise-lifecycle/apex-ledger.bundle /tmp/apex-ledger-restored
           cd /tmp/apex-ledger-restored
           git log --graph --oneline --all
+          RESTORED_SHA=$(git rev-parse HEAD)
+          echo "Restored Commit SHA: $RESTORED_SHA"
+          test "$RESTORED_SHA" = "61b8c36c8a9ea8b1d808a5837186804c3fb926b3"
           npm test

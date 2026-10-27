@@ -7,7 +7,8 @@ import {
   IdempotencyConflictError,
   CurrencyMismatchError,
   DuplicateTransactionIdError,
-  InsufficientFundsError
+  InsufficientFundsError,
+  MAX_SAFE_AMOUNT
 } from '../src/index.mjs';
 
 // ============================================================================
@@ -592,4 +593,368 @@ test('QA-ADV-10: Input validation edge cases: empty strings, whitespace, nulls, 
     },
     /Cross-tenant entry rejected/
   );
+});
+
+// ============================================================================
+// QA-ADV-11: Precision and Safe Integer boundary values
+// ============================================================================
+test('QA-ADV-11: Precision and Safe Integer boundary values', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({ id: 'acc_hi', tenantId: 't_safe', type: 'asset', creditLimit: MAX_SAFE_AMOUNT });
+  ledger.createAccount({ id: 'contra_hi', tenantId: 't_safe', type: 'equity' });
+
+  // 1. Exact MAX_SAFE_AMOUNT (900719925474.0991) passes valid 4-decimal precision
+  const txBoundary = ledger.postTransaction({
+    id: 'tx_boundary_pass',
+    tenantId: 't_safe',
+    entries: [
+      { accountId: 'acc_hi', amount: MAX_SAFE_AMOUNT, direction: 'debit' },
+      { accountId: 'contra_hi', amount: MAX_SAFE_AMOUNT, direction: 'credit' }
+    ]
+  });
+  assert.equal(txBoundary.status, 'POSTED');
+  assert.equal(ledger.getAccount('t_safe', 'acc_hi').balance, MAX_SAFE_AMOUNT);
+
+  // 2. MAX_SAFE_AMOUNT + 0.0001 throws InvalidPrecisionError
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_boundary_plus_micro',
+        tenantId: 't_safe',
+        entries: [
+          { accountId: 'acc_hi', amount: MAX_SAFE_AMOUNT + 0.0001, direction: 'debit' },
+          { accountId: 'contra_hi', amount: MAX_SAFE_AMOUNT + 0.0001, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+
+  // 3. Integer 900719925475 throws InvalidPrecisionError
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_unsafe_int',
+        tenantId: 't_safe',
+        entries: [
+          { accountId: 'acc_hi', amount: 900719925475, direction: 'debit' },
+          { accountId: 'contra_hi', amount: 900719925475, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+
+  // 4. Sub-cent precision near large numbers fails (5-6 decimals)
+  ledger.createAccount({ id: 'acc_sub', tenantId: 't_safe', type: 'asset', creditLimit: 500000000 });
+  ledger.createAccount({ id: 'contra_sub', tenantId: 't_safe', type: 'equity' });
+  const largeSubcents = [
+    100000000.00001,
+    50000000.00005,
+    10000000.00001,
+    1000000.00005
+  ];
+  for (const amt of largeSubcents) {
+    assert.throws(
+      () => {
+        ledger.postTransaction({
+          id: `tx_subcent_${Math.floor(amt)}`,
+          tenantId: 't_safe',
+          entries: [
+            { accountId: 'acc_sub', amount: amt, direction: 'debit' },
+            { accountId: 'contra_sub', amount: amt, direction: 'credit' }
+          ]
+        });
+      },
+      (err) => err instanceof InvalidPrecisionError && /exceeds maximum precision of 4 decimal places/i.test(err.message)
+    );
+  }
+
+  // 5. Account creditLimit enforcement on MAX_SAFE_AMOUNT boundaries
+  assert.throws(
+    () => {
+      ledger.createAccount({
+        id: 'acc_overflow_limit',
+        tenantId: 't_safe',
+        type: 'asset',
+        creditLimit: MAX_SAFE_AMOUNT + 0.0001
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError
+  );
+
+  assert.throws(
+    () => {
+      ledger.createAccount({
+        id: 'acc_unsafe_limit',
+        tenantId: 't_safe',
+        type: 'asset',
+        creditLimit: 900719925475
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError
+  );
+});
+
+// ============================================================================
+// QA-ADV-12: Idempotency conflict matrix on transaction ID variations with identical entries
+// ============================================================================
+test('QA-ADV-12: Idempotency conflict matrix on transaction ID variations with identical entries', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({ id: 'acc_src', tenantId: 't_matrix', type: 'asset', creditLimit: 1000 });
+  ledger.createAccount({ id: 'acc_dst', tenantId: 't_matrix', type: 'asset', creditLimit: 1000 });
+
+  const SHARED_IDEM_KEY = 'idem-matrix-shared-key';
+  const canonicalEntries = [
+    { accountId: 'acc_src', amount: 350.50, direction: 'credit' },
+    { accountId: 'acc_dst', amount: 350.50, direction: 'debit' }
+  ];
+
+  // 1. Post initial canonical transaction
+  const initialTx = ledger.postTransaction({
+    id: 'tx_canonical_001',
+    tenantId: 't_matrix',
+    idempotencyKey: SHARED_IDEM_KEY,
+    description: 'Matrix transfer',
+    entries: canonicalEntries
+  });
+  assert.equal(initialTx.id, 'tx_canonical_001');
+  assert.equal(ledger.getAccount('t_matrix', 'acc_src').balance, -350.50);
+  assert.equal(ledger.getAccount('t_matrix', 'acc_dst').balance, 350.50);
+
+  // 2. Exact match replay succeeds
+  const exactReplay = ledger.postTransaction({
+    id: 'tx_canonical_001',
+    tenantId: 't_matrix',
+    idempotencyKey: SHARED_IDEM_KEY,
+    description: 'Matrix transfer',
+    entries: canonicalEntries
+  });
+  assert.equal(exactReplay.id, 'tx_canonical_001');
+  assert.equal(ledger.getAccount('t_matrix', 'acc_src').balance, -350.50);
+
+  // 3. Conflict Matrix: Variation in transaction ID with identical entries and description
+  const conflictingIds = [
+    'tx_canonical_002',
+    'TX_CANONICAL_001',
+    'tx_canonical_001_v2',
+    'tx_canonical_001_copy',
+    'tx_diff'
+  ];
+
+  for (const conflictId of conflictingIds) {
+    assert.throws(
+      () => {
+        ledger.postTransaction({
+          id: conflictId,
+          tenantId: 't_matrix',
+          idempotencyKey: SHARED_IDEM_KEY,
+          description: 'Matrix transfer',
+          entries: canonicalEntries
+        });
+      },
+      (err) => err instanceof IdempotencyConflictError || err.code === 'IDEMPOTENCY_CONFLICT',
+      `Replaying idempotency key with conflicting ID "${conflictId}" must throw IdempotencyConflictError`
+    );
+
+    // Verify conflicting ID was never registered in transactions store
+    assert.equal(ledger.getTransaction('t_matrix', conflictId), null);
+    assert.equal(ledger.transactions.has(`t_matrix:${conflictId}`), false);
+  }
+
+  // Account balances must remain unchanged after all conflicting replay attempts
+  assert.equal(ledger.getAccount('t_matrix', 'acc_src').balance, -350.50);
+  assert.equal(ledger.getAccount('t_matrix', 'acc_dst').balance, 350.50);
+});
+
+// ============================================================================
+// QA-ADV-13: Ingress entry sanitization rejecting function properties, symbols, and uncloneable objects with atomic rollback
+// ============================================================================
+test('QA-ADV-13: Ingress entry sanitization rejecting function properties, symbols, and uncloneable objects with atomic rollback', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({ id: 'acc_clean_1', tenantId: 't_san', type: 'asset', creditLimit: 500 });
+  ledger.createAccount({ id: 'acc_clean_2', tenantId: 't_san', type: 'asset', creditLimit: 500 });
+
+  const initialBal1 = ledger.getAccount('t_san', 'acc_clean_1').balance;
+  const initialBal2 = ledger.getAccount('t_san', 'acc_clean_2').balance;
+  const initialAuditLen = ledger.auditEvents.length;
+  const initialTxCount = ledger.transactions.size;
+  const initialIdempCount = ledger.idempotencyIndex.size;
+
+  // 1. Entry containing a function property
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_func_prop',
+        tenantId: 't_san',
+        idempotencyKey: 'idem_func',
+        entries: [
+          { accountId: 'acc_clean_1', amount: 50, direction: 'debit', maliciousHook: () => {} },
+          { accountId: 'acc_clean_2', amount: 50, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof TypeError && /must be a primitive value/i.test(err.message)
+  );
+
+  // 2. Entry containing a Symbol property
+  const symSecret = Symbol('exploit');
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_sym_prop',
+        tenantId: 't_san',
+        idempotencyKey: 'idem_sym',
+        entries: [
+          { accountId: 'acc_clean_1', amount: 50, direction: 'debit', [symSecret]: 'injected' },
+          { accountId: 'acc_clean_2', amount: 50, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof TypeError && /must not contain symbol properties/i.test(err.message)
+  );
+
+  // 3. Entry containing nested non-primitive object property
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_obj_prop',
+        tenantId: 't_san',
+        idempotencyKey: 'idem_obj',
+        entries: [
+          { accountId: 'acc_clean_1', amount: 50, direction: 'debit', metadata: { nested: 'payload' } },
+          { accountId: 'acc_clean_2', amount: 50, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof TypeError && /must be a primitive value/i.test(err.message)
+  );
+
+  // 4. Entry containing uncloneable object
+  const uncloneableEntry = {
+    accountId: 'acc_clean_1',
+    amount: 50,
+    direction: 'debit'
+  };
+  Object.defineProperty(uncloneableEntry, 'failingGetter', {
+    get() {
+      throw new Error('Getter evaluation failed');
+    },
+    enumerable: true
+  });
+
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_uncloneable',
+        tenantId: 't_san',
+        idempotencyKey: 'idem_uncloneable',
+        entries: [
+          uncloneableEntry,
+          { accountId: 'acc_clean_2', amount: 50, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => /Getter evaluation failed|cannot be cloned|primitive value/i.test(err.message)
+  );
+
+  // 5. Verify 100% zero-side-effect atomic rollback across all state stores
+  assert.equal(ledger.getAccount('t_san', 'acc_clean_1').balance, initialBal1);
+  assert.equal(ledger.getAccount('t_san', 'acc_clean_2').balance, initialBal2);
+  assert.equal(ledger.auditEvents.length, initialAuditLen);
+  assert.equal(ledger.transactions.size, initialTxCount);
+  assert.equal(ledger.idempotencyIndex.size, initialIdempCount);
+
+  // Ensure clean entries succeed without interference
+  const cleanTx = ledger.postTransaction({
+    id: 'tx_clean_succeeds',
+    tenantId: 't_san',
+    entries: [
+      { accountId: 'acc_clean_1', amount: 50, direction: 'debit' },
+      { accountId: 'acc_clean_2', amount: 50, direction: 'credit' }
+    ]
+  });
+  assert.equal(cleanTx.status, 'POSTED');
+  assert.equal(ledger.getAccount('t_san', 'acc_clean_1').balance, 50);
+});
+
+// ============================================================================
+// QA-ADV-14: Audit failure resilience during policy updates ensuring no balance or limit changes persist
+// ============================================================================
+test('QA-ADV-14: Audit failure resilience during policy updates ensuring no balance or limit changes persist', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({
+    id: 'acc_resilience',
+    tenantId: 't_res',
+    type: 'asset',
+    creditLimit: 300,
+    overdraftEnabled: true,
+    overdraftAlertThreshold: 0.8
+  });
+
+  // Post transaction to bring account into overdraft
+  ledger.createAccount({ id: 'acc_contra', tenantId: 't_res', type: 'asset' });
+  ledger.postTransaction({
+    id: 'tx_into_od',
+    tenantId: 't_res',
+    entries: [
+      { accountId: 'acc_resilience', amount: 150, direction: 'credit' },
+      { accountId: 'acc_contra', amount: 150, direction: 'debit' }
+    ]
+  });
+
+  const account = ledger.getAccount('t_res', 'acc_resilience');
+  assert.equal(account.balance, -150);
+  assert.equal(account.creditLimit, 300);
+  assert.equal(account.overdraftEnabled, true);
+  assert.equal(account.overdraftAlertThreshold, 0.8);
+
+  const initialAuditCount = ledger.auditEvents.length;
+
+  // Simulate transient audit failure on OVERDRAFT_CONFIG_UPDATED
+  const originalEmit = ledger._emitAuditEvent;
+  ledger._emitAuditEvent = (event) => {
+    if (event.type === 'OVERDRAFT_CONFIG_UPDATED') {
+      throw new Error('Audit queue buffer overflow');
+    }
+    return originalEmit.call(ledger, event);
+  };
+
+  // Attempt policy update that attempts to change limit and alert threshold
+  assert.throws(
+    () => {
+      ledger.updateAccountPolicy('t_res', 'acc_resilience', {
+        creditLimit: 500,
+        overdraftAlertThreshold: 0.95
+      });
+    },
+    /Audit queue buffer overflow/
+  );
+
+  // Verify complete state integrity:
+  // - Balance MUST NOT change
+  assert.equal(account.balance, -150, 'Balance must remain -150');
+  // - creditLimit MUST NOT persist new value 500
+  assert.equal(account.creditLimit, 300, 'creditLimit must remain 300');
+  // - overdraftAlertThreshold MUST NOT persist new value 0.95
+  assert.equal(account.overdraftAlertThreshold, 0.8, 'overdraftAlertThreshold must remain 0.8');
+  // - overdraftEnabled MUST remain true
+  assert.equal(account.overdraftEnabled, true);
+  // - Audit events array length must not leak partial events
+  assert.equal(ledger.auditEvents.length, initialAuditCount);
+
+  // Restore audit emitter and confirm subsequent update succeeds
+  ledger._emitAuditEvent = originalEmit;
+  const successfulEvent = ledger.updateAccountPolicy('t_res', 'acc_resilience', {
+    creditLimit: 400,
+    overdraftAlertThreshold: 0.85
+  });
+
+  assert.equal(account.creditLimit, 400);
+  assert.equal(account.overdraftAlertThreshold, 0.85);
+  assert.equal(account.balance, -150);
+  assert.equal(successfulEvent.type, 'OVERDRAFT_CONFIG_UPDATED');
+  assert.equal(successfulEvent.details.newCreditLimit, 400);
+  assert.equal(successfulEvent.details.previousCreditLimit, 300);
+  assert.equal(ledger.auditEvents.length, initialAuditCount + 1);
 });

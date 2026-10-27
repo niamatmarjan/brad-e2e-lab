@@ -545,7 +545,7 @@ test('QA: Credit-normal account (liability) supports overdraft and enforces hard
   assert.equal(liability.balance, -150, 'Liability balance must remain -150 after breach');
 });
 
-test('QA: Double-entry zero-sum tolerance boundary (0.0001 pass vs 0.0002 fail)', () => {
+test('QA: Double-entry zero-sum strict balance (exact match passes, 0.0001 and 0.0002 differences fail)', () => {
   const ledger = new Ledger();
   ledger.createAccount({ id: 'cash_zs', tenantId: 'tenant_qa', type: 'asset' });
   ledger.createAccount({ id: 'rev_zs', tenantId: 'tenant_qa', type: 'revenue' });

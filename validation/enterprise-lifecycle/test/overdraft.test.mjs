@@ -474,7 +474,7 @@ test('AC6: Idempotency Replay Protection (TC-9: Idempotency Replay Determinism &
 
   // Replay identical transaction with same idempotencyKey
   const tx2 = ledger.postTransaction({
-    id: 'tx_idem_replay_call',
+    id: 'tx_idem_overdraft',
     tenantId: 'tenant_acme',
     idempotencyKey: 'idem_key_replay_001',
     entries: [
@@ -491,4 +491,20 @@ test('AC6: Idempotency Replay Protection (TC-9: Idempotency Replay Determinism &
   // Zero additional audit events emitted
   const auditEventsAfterReplay = ledger.getAuditEvents('tenant_acme');
   assert.equal(auditEventsAfterReplay.length, auditEventsBeforeReplay.length);
+
+  // Replay with different tx id must throw IdempotencyConflictError (DEFECT-IRONCLAD-014)
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_idem_replay_call',
+        tenantId: 'tenant_acme',
+        idempotencyKey: 'idem_key_replay_001',
+        entries: [
+          { accountId: 'expense_01', amount: 150, direction: 'debit' },
+          { accountId: 'cash_01', amount: 150, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err.code === 'IDEMPOTENCY_CONFLICT' || err.name === 'IdempotencyConflictError'
+  );
 });

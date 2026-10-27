@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Account, Ledger } from '../src/index.mjs';
+import {
+  Account,
+  Ledger,
+  InvalidPrecisionError,
+  IdempotencyConflictError,
+  DuplicateTransactionIdError,
+  CurrencyMismatchError,
+  MAX_SAFE_AMOUNT
+} from '../src/index.mjs';
 
 // ============================================================================
 // DEFECT-IRONCLAD-001: Tenant Isolation on Transaction Store and Replay
@@ -573,4 +581,289 @@ test('REGRESSION: DEFECT-IRONCLAD-013 - Validate entry.accountId is non-empty st
     },
     /Cross-tenant|tenant/i
   );
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-014: Idempotency Key Reuse with Conflicting Transaction ID
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-014 - Idempotency key reuse with conflicting transaction ID throws IdempotencyConflictError', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({ id: 'cash', tenantId: 't14', type: 'asset', creditLimit: 500 });
+  ledger.createAccount({ id: 'capital', tenantId: 't14', type: 'equity' });
+
+  // Post initial transaction with idempotency key
+  const tx1 = ledger.postTransaction({
+    id: 'tx_orig_14',
+    tenantId: 't14',
+    idempotencyKey: 'idem_key_014',
+    description: 'Initial investment',
+    entries: [
+      { accountId: 'cash', amount: 150, direction: 'debit' },
+      { accountId: 'capital', amount: 150, direction: 'credit' }
+    ]
+  });
+  assert.equal(tx1.id, 'tx_orig_14');
+  assert.equal(ledger.getAccount('t14', 'cash').balance, 150);
+
+  // Exact replay with same id succeeds and returns cached tx
+  const txReplay = ledger.postTransaction({
+    id: 'tx_orig_14',
+    tenantId: 't14',
+    idempotencyKey: 'idem_key_014',
+    description: 'Initial investment',
+    entries: [
+      { accountId: 'cash', amount: 150, direction: 'debit' },
+      { accountId: 'capital', amount: 150, direction: 'credit' }
+    ]
+  });
+  assert.equal(txReplay.id, 'tx_orig_14');
+  assert.equal(ledger.getAccount('t14', 'cash').balance, 150);
+
+  // Replay with identical entries/description but DIFFERENT transaction ID must throw IdempotencyConflictError
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_conflict_14',
+        tenantId: 't14',
+        idempotencyKey: 'idem_key_014',
+        description: 'Initial investment',
+        entries: [
+          { accountId: 'cash', amount: 150, direction: 'debit' },
+          { accountId: 'capital', amount: 150, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof IdempotencyConflictError || err.code === 'IDEMPOTENCY_CONFLICT' || /idempotency key reused with conflicting transaction/i.test(err.message)
+  );
+
+  // Balances must not change and conflicting tx ID must not be registered
+  assert.equal(ledger.getAccount('t14', 'cash').balance, 150);
+  assert.equal(ledger.getTransaction('t14', 'tx_conflict_14'), null);
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-015: Transaction and Index Atomicity on Cloning / State Failure
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-015 - Transaction and index atomicity after cloning error rolls back all 4 state stores', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({ id: 'acc_a', tenantId: 't15', type: 'asset', creditLimit: 500 });
+  ledger.createAccount({ id: 'acc_b', tenantId: 't15', type: 'asset', creditLimit: 500 });
+
+  // Baseline setup
+  ledger.postTransaction({
+    id: 'tx_baseline_15',
+    tenantId: 't15',
+    entries: [
+      { accountId: 'acc_a', amount: 50, direction: 'debit' },
+      { accountId: 'acc_b', amount: 50, direction: 'credit' }
+    ]
+  });
+
+  const origAuditLen = ledger.auditEvents.length;
+  const origTxCount = ledger.transactions.size;
+  const origIdempCount = ledger.idempotencyIndex.size;
+  assert.equal(ledger.getAccount('t15', 'acc_a').balance, 50);
+  assert.equal(ledger.getAccount('t15', 'acc_b').balance, -50);
+
+  // Force structuredClone error during transaction record finalization
+  const origClone = globalThis.structuredClone;
+  try {
+    globalThis.structuredClone = (val) => {
+      // If cloning txRecord inside postTransaction, throw simulated failure
+      if (val && val.id === 'tx_fail_clone_15') {
+        throw new Error('Simulated structuredClone failure');
+      }
+      return origClone(val);
+    };
+
+    assert.throws(
+      () => {
+        ledger.postTransaction({
+          id: 'tx_fail_clone_15',
+          tenantId: 't15',
+          idempotencyKey: 'idem_key_015',
+          entries: [
+            { accountId: 'acc_a', amount: 25, direction: 'debit' },
+            { accountId: 'acc_b', amount: 25, direction: 'credit' }
+          ]
+        });
+      },
+      /Simulated structuredClone failure/
+    );
+  } finally {
+    globalThis.structuredClone = origClone;
+  }
+
+  // Verify all 4 state stores rolled back atomically:
+  // 1. Account balances restored
+  assert.equal(ledger.getAccount('t15', 'acc_a').balance, 50, 'Account A balance must rollback to 50');
+  assert.equal(ledger.getAccount('t15', 'acc_b').balance, -50, 'Account B balance must rollback to -50');
+
+  // 2. Audit events restored
+  assert.equal(ledger.auditEvents.length, origAuditLen, 'Audit events length must rollback to prior snapshot length');
+
+  // 3. Transactions map purged of failed transaction
+  assert.equal(ledger.transactions.has('t15:tx_fail_clone_15'), false, 'Transactions map must not contain failed transaction key');
+  assert.equal(ledger.getTransaction('t15', 'tx_fail_clone_15'), null);
+  assert.equal(ledger.transactions.size, origTxCount);
+
+  // 4. Idempotency index purged of failed key
+  assert.equal(ledger.idempotencyIndex.has('t15:idem_key_015'), false, 'Idempotency index must not contain failed key');
+  assert.equal(ledger.idempotencyIndex.size, origIdempCount);
+
+  // Subsequent transaction with same ID and idempotency key succeeds cleanly
+  const recoveredTx = ledger.postTransaction({
+    id: 'tx_fail_clone_15',
+    tenantId: 't15',
+    idempotencyKey: 'idem_key_015',
+    entries: [
+      { accountId: 'acc_a', amount: 25, direction: 'debit' },
+      { accountId: 'acc_b', amount: 25, direction: 'credit' }
+    ]
+  });
+  assert.equal(recoveredTx.id, 'tx_fail_clone_15');
+  assert.equal(ledger.getAccount('t15', 'acc_a').balance, 75);
+  assert.equal(ledger.getAccount('t15', 'acc_b').balance, -75);
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-016: Account Policy Modification Rollback on Audit Failure
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-016 - Account policy modification is atomically rolled back if audit emission fails', () => {
+  const ledger = new Ledger();
+  ledger.createAccount({
+    id: 'acc_pol_16',
+    tenantId: 't16',
+    type: 'asset',
+    creditLimit: 200,
+    overdraftEnabled: true,
+    overdraftAlertThreshold: 0.75
+  });
+
+  const account = ledger.getAccount('t16', 'acc_pol_16');
+  const initialAuditLen = ledger.auditEvents.length;
+
+  // Intercept _emitAuditEvent to fail on policy change
+  const originalEmit = ledger._emitAuditEvent;
+  ledger._emitAuditEvent = (event) => {
+    if (event.type === 'OVERDRAFT_CONFIG_UPDATED') {
+      throw new Error('Audit service unavailable');
+    }
+    return originalEmit.call(ledger, event);
+  };
+
+  assert.throws(
+    () => {
+      ledger.updateAccountPolicy('t16', 'acc_pol_16', {
+        creditLimit: 800,
+        overdraftEnabled: false,
+        overdraftAlertThreshold: 0.95
+      });
+    },
+    /Audit service unavailable/
+  );
+
+  // Verify atomic rollback of all account policy fields
+  assert.equal(account.creditLimit, 200, 'creditLimit must be rolled back to 200');
+  assert.equal(account.overdraftEnabled, true, 'overdraftEnabled must be rolled back to true');
+  assert.equal(account.overdraftAlertThreshold, 0.75, 'overdraftAlertThreshold must be rolled back to 0.75');
+  assert.equal(ledger.auditEvents.length, initialAuditLen, 'Audit events length must remain unchanged');
+
+  // Restore audit emitter and verify subsequent update applies cleanly
+  ledger._emitAuditEvent = originalEmit;
+  const auditEvent = ledger.updateAccountPolicy('t16', 'acc_pol_16', {
+    creditLimit: 500,
+    overdraftAlertThreshold: 0.9
+  });
+
+  assert.equal(account.creditLimit, 500);
+  assert.equal(account.overdraftAlertThreshold, 0.9);
+  assert.equal(auditEvent.type, 'OVERDRAFT_CONFIG_UPDATED');
+  assert.equal(auditEvent.details.newCreditLimit, 500);
+  assert.equal(auditEvent.details.previousCreditLimit, 200);
+});
+
+// ============================================================================
+// DEFECT-IRONCLAD-017: Monetary Safe Integer Boundary Enforcement
+// ============================================================================
+test('REGRESSION: DEFECT-IRONCLAD-017 - Monetary safe integer boundary enforcement rejects amounts and limits exceeding MAX_SAFE_AMOUNT', () => {
+  const ledger = new Ledger();
+
+  assert.equal(MAX_SAFE_AMOUNT, Number.MAX_SAFE_INTEGER / 10000);
+  assert.equal(MAX_SAFE_AMOUNT, 900719925474.0991);
+
+  // Exact MAX_SAFE_AMOUNT succeeds for account creation
+  const safeAccount = ledger.createAccount({
+    id: 'safe_acc',
+    tenantId: 't17',
+    type: 'asset',
+    creditLimit: MAX_SAFE_AMOUNT
+  });
+  assert.equal(safeAccount.creditLimit, MAX_SAFE_AMOUNT);
+
+  // Account creation with creditLimit exceeding MAX_SAFE_AMOUNT throws InvalidPrecisionError
+  assert.throws(
+    () => {
+      new Account({
+        id: 'acc_unsafe',
+        tenantId: 't17',
+        type: 'asset',
+        creditLimit: 900719925475
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+
+  // updatePolicy with creditLimit exceeding MAX_SAFE_AMOUNT throws InvalidPrecisionError
+  assert.throws(
+    () => {
+      safeAccount.updatePolicy({ creditLimit: MAX_SAFE_AMOUNT + 0.0001 });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+
+  // Transaction posting with entry amount exceeding MAX_SAFE_AMOUNT throws InvalidPrecisionError
+  ledger.createAccount({ id: 'contra', tenantId: 't17', type: 'equity' });
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_unsafe_amount',
+        tenantId: 't17',
+        entries: [
+          { accountId: 'safe_acc', amount: 900719925475, direction: 'debit' },
+          { accountId: 'contra', amount: 900719925475, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+
+  // Transaction posting with valid MAX_SAFE_AMOUNT succeeds within 4-decimal precision
+  const safeTx = ledger.postTransaction({
+    id: 'tx_safe_boundary',
+    tenantId: 't17',
+    entries: [
+      { accountId: 'safe_acc', amount: MAX_SAFE_AMOUNT, direction: 'debit' },
+      { accountId: 'contra', amount: MAX_SAFE_AMOUNT, direction: 'credit' }
+    ]
+  });
+  assert.equal(safeTx.status, 'POSTED');
+  assert.equal(safeAccount.balance, MAX_SAFE_AMOUNT);
+
+  // Adding further amount that pushes balance beyond MAX_SAFE_AMOUNT is rejected
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_overflow_balance',
+        tenantId: 't17',
+        entries: [
+          { accountId: 'safe_acc', amount: 1.0000, direction: 'debit' },
+          { accountId: 'contra', amount: 1.0000, direction: 'credit' }
+        ]
+      });
+    },
+    (err) => err instanceof InvalidPrecisionError && /exceeds maximum safe integer monetary limit/i.test(err.message)
+  );
+  // Prior balance intact
+  assert.equal(safeAccount.balance, MAX_SAFE_AMOUNT);
 });

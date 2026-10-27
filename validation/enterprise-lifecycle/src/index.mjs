@@ -1,4 +1,4 @@
-export { Account, InvalidPrecisionError } from './account.mjs';
+export { Account, InvalidPrecisionError, MAX_SAFE_AMOUNT } from './account.mjs';
 export {
   Ledger,
   IdempotencyConflictError,
