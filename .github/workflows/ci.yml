@@ -1,9 +1,8 @@
 name: Lab CI
 on:
   pull_request:
-    branches: [main, test/production-readiness-evidence-lab]
   push:
-    branches: [main, audit/gate-02-enterprise-acceptance]
+    branches: [main, audit/gate-02-enterprise-acceptance, 'audit/**', 'test/**']
 permissions:
   contents: read
 jobs:

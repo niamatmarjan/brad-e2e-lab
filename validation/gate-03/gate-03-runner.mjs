@@ -513,14 +513,16 @@ test('ATDD: Rate Limiter Acceptance Standard (Given/When/Then)', () => {
       timestamp: new Date().toISOString()
     };
 
+    const traceJson = JSON.stringify(trace, null, 2);
     const traceFile = join(tracesDir, `trace-${c.id.toLowerCase()}.json`);
-    writeFileSync(traceFile, JSON.stringify(trace, null, 2), 'utf8');
+    writeFileSync(traceFile, traceJson, 'utf8');
 
     results.push(trace);
     manifest.cases.push({
       case_id: c.id,
+      evidence_class: 'STATIC_SCRIPTED_FIXTURE_SIMULATION',
       trace_file: `traces/trace-${c.id.toLowerCase()}.json`,
-      trace_sha256: sha256(JSON.stringify(trace)),
+      trace_sha256: sha256(traceJson),
       route_matched: trace.route_matched,
       execution_mode: trace.execution_mode,
       safety_violation: trace.safety_violation,

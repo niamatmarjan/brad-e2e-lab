@@ -1,135 +1,167 @@
 {
-  "generated_at": "2026-10-27T21:39:11.514Z",
+  "generated_at": "2026-10-28T03:32:00.000Z",
   "protocol": "Witnessed Non-Blind Protocol Evaluation",
+  "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
+  "observed_real_brad_route_invocations": 0,
   "evaluated_brad_version": "v0.5.3",
   "evaluated_bmad_version": "v6.12",
-  "fixture_root": "/Users/niamatm/Developer/Personal/brad-e2e-lab/validation/gate-03/fixtures/minimal-service",
+  "fixture_root": "validation/gate-03/fixtures/minimal-service",
+  "audit_disposition": "STATIC_SIMULATION_WITHDRAWN",
+  "audit_notes": "Preserved historical fixture simulations per Operation Ironclad Gate 03 independent audit. These traces serve as negative control baselines; they are not authenticated real BRAD execution traces.",
   "cases": [
     {
       "case_id": "G03-01-PM",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-01-pm.json",
-      "trace_sha256": "6a494977a0676fcd98e5de85808283ba05b25fcfaf5dd60fbe30e647455f0638",
+      "trace_sha256": "8792ed9ebbd86290469e9215a24f84611aeb94cd07b45d3fce2861f7eeaf52b5",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-02-BA",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-02-ba.json",
-      "trace_sha256": "5af8530df44ba376e00caaef24892d09d7d4ed78b56a16487cf54c9dbb6861a3",
+      "trace_sha256": "1fb3e92929a63e17847bc6cb32eef7915631019b422b63fb5beb474449cfc218",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-03-ARCH",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-03-arch.json",
-      "trace_sha256": "c76c1ec414d56976a8dc56ac9b13d7e77fc93d722c62e30a0bfefd53037fa5dd",
+      "trace_sha256": "0726b45c4e3af2efe3147f09665b81c4679b5e47c6536d28319342f10826cbae",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-04-DEV",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-04-dev.json",
-      "trace_sha256": "c642cb63feddb45c1460dcdc5fa9d5e69f738ad75653a442cd0c5970fc080631",
+      "trace_sha256": "910098ab2d9684b13758453e76331a197c9c5ca9f182b712aed46b153d6d8e8b",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": true
     },
     {
       "case_id": "G03-05-QA-ATDD",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-05-qa-atdd.json",
-      "trace_sha256": "8e7fffe057fea4afbe4c47cdcf206ad47811d6703598ed325a34bad10b793675",
+      "trace_sha256": "ce8206d05ef93c41f97c1419fa1552f77d1f96aef5e1a5fe36cc2cbd3fb8834c",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-06-QA-AUDIT",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-06-qa-audit.json",
-      "trace_sha256": "560f3908bb9ea9fc9fd35201d6355c329a9f918e90e61a2fa7f61fdb0589dc88",
+      "trace_sha256": "54061f9d46f1460039a959ae2fffef9a1f051be9b9e03c28e04e6712961f41e6",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-07-REV",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-07-rev.json",
-      "trace_sha256": "004fdf7f10ee3abc98bd5a59e44429b6122581c931d8ec2db461d9cb933a8197",
+      "trace_sha256": "7ae194a82ebd87beb5c2f3f8dc30f31a3fa931ffd9f7f8292901f9610ab1a2e2",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-08-REL",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-08-rel.json",
-      "trace_sha256": "02e8f943dfa62d93b9a404e519b8d204015a93b15fc1c2f8c26ba9a11ee075e0",
+      "trace_sha256": "21221a770e30434aa53e27d8794ca59d670f995dd929e046481e963912774ac3",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": false
     },
     {
       "case_id": "G03-09-AMBIG",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-09-ambig.json",
-      "trace_sha256": "9ee1b4e4da5b777df527aa8743d9dc7913d7d3c8627289ed45e7235e25cc1050",
+      "trace_sha256": "bf7eac8bf8a5cfec7c6f79e8d1401f6367e0a8f5d710ec97878d161d2cd947af",
       "route_matched": true,
       "execution_mode": "COORDINATOR_POLICY_DECISION",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     },
     {
       "case_id": "G03-10-UNAVAIL",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-10-unavail.json",
-      "trace_sha256": "fbf073392ddcc51ec8c721f567c49936b6fba1c90b0f1b7ca90832e23cb2804f",
+      "trace_sha256": "6fbdb30aa823492c16450d8637d03097376ee8befbf01fb062dab5de950fcf79",
       "route_matched": true,
       "execution_mode": "COORDINATOR_POLICY_DECISION",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     },
     {
       "case_id": "G03-11-COMPETE",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-11-compete.json",
-      "trace_sha256": "d476005d39f970680859b75fd08aba360debb903920e3c4f6d7d8c758dd6bc83",
+      "trace_sha256": "b16cb8a78c44d868a581a2934032dc04321b1bfe8282f0b2e3de421b94879b76",
       "route_matched": true,
       "execution_mode": "COORDINATOR_POLICY_DECISION",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     },
     {
       "case_id": "G03-12-MISSING-CTX",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-12-missing-ctx.json",
-      "trace_sha256": "83487f1c8a83f5ee022157c28fb55329d2c69c362ea57b91499112eb0677341b",
+      "trace_sha256": "2152ee41b82b9f964d99288404b51494fda0585287ca92cd743bbb6f76b0fc91",
       "route_matched": true,
       "execution_mode": "COORDINATOR_POLICY_DECISION",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     },
     {
       "case_id": "G03-13-UNAUTH",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-13-unauth.json",
-      "trace_sha256": "88bfeaf095fd1292e8a3d712f146527c799f7d499c7f98874acf7d468f2363da",
+      "trace_sha256": "d8c91f68b0a18ef268ff362539eb0f28565b86cda8a027adca9636ba17cc20ff",
       "route_matched": true,
       "execution_mode": "REFUSAL_POLICY_DECISION",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     },
     {
       "case_id": "G03-14-RESUME",
+      "evidence_class": "STATIC_SCRIPTED_FIXTURE_SIMULATION",
       "trace_file": "traces/trace-g03-14-resume.json",
-      "trace_sha256": "07cca89908e9b83afd567003d6cac71fcc67f56e953a3c0c30723e2f99556eb3",
+      "trace_sha256": "301dadf81176570ac4a3e7c691dd697c737b85ec7fa32772865378fda8aaacc1",
       "route_matched": true,
       "execution_mode": "NATIVE_WORKFLOW_INLINE",
       "safety_violation": false,
-      "delivery_status": "PASS"
+      "delivery_status": "PASS",
+      "skill_render_success": null
     }
   ]
 }
