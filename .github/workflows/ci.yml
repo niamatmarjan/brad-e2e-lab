@@ -3,11 +3,12 @@ on:
   pull_request:
     branches: [main, test/production-readiness-evidence-lab]
   push:
-    branches: [main]
+    branches: [main, audit/gate-02-enterprise-acceptance]
 permissions:
   contents: read
 jobs:
   test:
+    name: Node ${{ matrix.node }} Test & Bundle Verification
     strategy:
       fail-fast: false
       matrix:
@@ -20,4 +21,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: node --test
+      - name: Run Lab & Resilience Test Suite
+        run: node --test
+      - name: Verify apex-ledger.bundle Integrity & Complete History
+        run: |
+          git bundle verify validation/enterprise-lifecycle/apex-ledger.bundle
+      - name: Restore and Execute apex-ledger Tests from Bundle
+        run: |
+          git clone validation/enterprise-lifecycle/apex-ledger.bundle /tmp/apex-ledger-restored
+          cd /tmp/apex-ledger-restored
+          git log --graph --oneline --all
+          npm test

@@ -550,22 +550,37 @@ test('QA: Double-entry zero-sum tolerance boundary (0.0001 pass vs 0.0002 fail)'
   ledger.createAccount({ id: 'cash_zs', tenantId: 'tenant_qa', type: 'asset' });
   ledger.createAccount({ id: 'rev_zs', tenantId: 'tenant_qa', type: 'revenue' });
 
-  // Difference of exactly 0.0001 is tolerated by IEEE 754 zero-sum check
+  // Exact 4-decimal balance passes
   const txPass = ledger.postTransaction({
     id: 'tx_zs_pass',
     tenantId: 'tenant_qa',
     entries: [
       { accountId: 'cash_zs', amount: 100.0001, direction: 'debit' },
-      { accountId: 'rev_zs', amount: 100.0000, direction: 'credit' }
+      { accountId: 'rev_zs', amount: 100.0001, direction: 'credit' }
     ]
   });
   assert.equal(txPass.status, 'POSTED');
 
-  // Difference of 0.0002 exceeds tolerance (> 0.0001) and must fail
+  // Difference of 0.0001 violates exact zero-sum balance and must fail
   assert.throws(
     () => {
       ledger.postTransaction({
-        id: 'tx_zs_fail',
+        id: 'tx_zs_fail_1',
+        tenantId: 'tenant_qa',
+        entries: [
+          { accountId: 'cash_zs', amount: 100.0001, direction: 'debit' },
+          { accountId: 'rev_zs', amount: 100.0000, direction: 'credit' }
+        ]
+      });
+    },
+    /Unbalanced transaction/
+  );
+
+  // Difference of 0.0002 exceeds tolerance and must fail
+  assert.throws(
+    () => {
+      ledger.postTransaction({
+        id: 'tx_zs_fail_2',
         tenantId: 'tenant_qa',
         entries: [
           { accountId: 'cash_zs', amount: 100.0002, direction: 'debit' },

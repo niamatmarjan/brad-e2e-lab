@@ -1,4 +1,70 @@
-import { Account } from './account.mjs';
+import { Account, InvalidPrecisionError } from './account.mjs';
+
+export { InvalidPrecisionError };
+
+export class IdempotencyConflictError extends Error {
+  constructor(message = 'Idempotency key reused with conflicting transaction payload') {
+    super(message);
+    this.name = 'IdempotencyConflictError';
+    this.code = 'IDEMPOTENCY_CONFLICT';
+  }
+}
+
+export class CurrencyMismatchError extends Error {
+  constructor(message = 'All accounts in transaction must share identical currency') {
+    super(message);
+    this.name = 'CurrencyMismatchError';
+    this.code = 'CURRENCY_MISMATCH';
+  }
+}
+
+export class DuplicateTransactionIdError extends Error {
+  constructor(message = 'Transaction ID already exists for tenant') {
+    super(message);
+    this.name = 'DuplicateTransactionIdError';
+    this.code = 'TRANSACTION_ALREADY_EXISTS';
+  }
+}
+
+export class InsufficientFundsError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'InsufficientFundsError';
+    this.code = 'INSUFFICIENT_FUNDS';
+  }
+}
+
+function validateDelimiter(val, name) {
+  if (typeof val === 'string' && val.includes(':')) {
+    throw new TypeError(`${name} must not contain delimiter ":"`);
+  }
+}
+
+function validatePrecision(val, name) {
+  if (Math.abs(val * 10000 - Math.round(val * 10000)) >= 1e-9) {
+    throw new InvalidPrecisionError(`${name} exceeds maximum precision of 4 decimal places`);
+  }
+}
+
+function payloadsMatch(storedPayload, incoming) {
+  if ((incoming.description || '') !== (storedPayload.description || '')) {
+    return false;
+  }
+  if (!Array.isArray(incoming.entries) || incoming.entries.length !== storedPayload.entries.length) {
+    return false;
+  }
+  for (let i = 0; i < storedPayload.entries.length; i++) {
+    const sE = storedPayload.entries[i];
+    const inE = incoming.entries[i];
+    if (inE.accountId !== sE.accountId) return false;
+    if (Math.round(inE.amount * 10000) !== Math.round(sE.amount * 10000)) return false;
+    if (inE.direction !== sE.direction) return false;
+    if (inE.tenantId !== undefined && inE.tenantId !== null) {
+      if (inE.tenantId !== sE.tenantId) return false;
+    }
+  }
+  return true;
+}
 
 export class Ledger {
   constructor() {
@@ -19,13 +85,26 @@ export class Ledger {
   }
 
   getAccount(tenantId, accountId) {
+    if (!tenantId || typeof tenantId !== 'string') return null;
+    if (!accountId || typeof accountId !== 'string') return null;
     const key = `${tenantId}:${accountId}`;
     return this.accounts.get(key) || null;
   }
 
+  getTransaction(tenantId, id) {
+    if (!tenantId || typeof tenantId !== 'string') throw new TypeError('tenantId required');
+    if (!id || typeof id !== 'string') throw new TypeError('Transaction id required');
+    const key = `${tenantId}:${id}`;
+    const tx = this.transactions.get(key);
+    return tx ? structuredClone(tx) : null;
+  }
+
   updateAccountPolicy(tenantId, accountId, policy = {}) {
     if (!tenantId || typeof tenantId !== 'string') throw new TypeError('tenantId required');
+    validateDelimiter(tenantId, 'tenantId');
     if (!accountId || typeof accountId !== 'string') throw new TypeError('accountId required');
+    validateDelimiter(accountId, 'accountId');
+
     const account = this.getAccount(tenantId, accountId);
     if (!account) {
       throw new Error(`Account ${accountId} not found for tenant ${tenantId}`);
@@ -65,8 +144,13 @@ export class Ledger {
   }
 
   _emitAuditEvent({ tenantId, accountId, transactionId, type, currentBalance, creditLimit, details = {} }) {
+    const account = this.getAccount(tenantId, accountId);
+    const overdraftEnabled = account ? account.overdraftEnabled : false;
     const overdraftUtilized = currentBalance < 0 ? Math.round(Math.abs(currentBalance) * 10000) / 10000 : 0;
-    const remainingCredit = Math.round(Math.max(0, creditLimit - overdraftUtilized) * 10000) / 10000;
+    const remainingCredit = overdraftEnabled
+      ? Math.round(Math.max(0, creditLimit - overdraftUtilized) * 10000) / 10000
+      : 0;
+
     const event = {
       id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       tenantId,
@@ -86,71 +170,133 @@ export class Ledger {
 
   postTransaction({ id, tenantId, idempotencyKey, timestamp = Date.now(), description = '', entries = [] }) {
     if (!id || typeof id !== 'string') throw new TypeError('Transaction id required');
+    validateDelimiter(id, 'Transaction id');
+
     if (!tenantId || typeof tenantId !== 'string') throw new TypeError('tenantId required');
+    validateDelimiter(tenantId, 'tenantId');
+
+    if (idempotencyKey !== undefined && idempotencyKey !== null) {
+      if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
+        throw new TypeError('idempotencyKey must be non-empty string');
+      }
+      validateDelimiter(idempotencyKey, 'idempotencyKey');
+    }
+
     if (!Array.isArray(entries) || entries.length < 2) {
       throw new Error('Transaction must contain at least 2 entries');
     }
 
-    // 1. Check idempotency
-    if (idempotencyKey) {
-      const existingTxId = this.idempotencyIndex.get(`${tenantId}:${idempotencyKey}`);
-      if (existingTxId) {
-        return this.transactions.get(existingTxId);
-      }
-    }
-
-    // 2. Verify double-entry zero sum: debits == credits
-    let totalDebit = 0;
-    let totalCredit = 0;
-
+    // 1. Validate all entry structures, amounts, and tenant boundaries
     for (const entry of entries) {
+      if (!entry || typeof entry !== 'object') {
+        throw new TypeError('Transaction entry must be an object');
+      }
+      if (!entry.accountId || typeof entry.accountId !== 'string' || entry.accountId.trim().length === 0) {
+        throw new TypeError('entry accountId must be non-empty string');
+      }
+      validateDelimiter(entry.accountId, 'entry accountId');
+
+      if (entry.tenantId !== undefined && entry.tenantId !== null) {
+        if (typeof entry.tenantId !== 'string' || entry.tenantId.trim().length === 0) {
+          throw new TypeError('entry tenantId must be non-empty string');
+        }
+        validateDelimiter(entry.tenantId, 'entry tenantId');
+        if (entry.tenantId !== tenantId) {
+          throw new Error(
+            `Cross-tenant entry rejected: entry tenantId "${entry.tenantId}" does not match transaction tenantId "${tenantId}"`
+          );
+        }
+      }
+
       if (typeof entry.amount !== 'number' || entry.amount <= 0 || !Number.isFinite(entry.amount)) {
         throw new TypeError('Entry amount must be positive finite number');
       }
-      if (entry.direction === 'debit') totalDebit += entry.amount;
-      else if (entry.direction === 'credit') totalCredit += entry.amount;
-      else throw new TypeError('Invalid direction, must be debit or credit');
+      validatePrecision(entry.amount, 'Entry amount');
+
+      if (entry.direction !== 'debit' && entry.direction !== 'credit') {
+        throw new TypeError('Invalid direction, must be debit or credit');
+      }
     }
 
-    const diff = Math.abs(Math.round((totalDebit - totalCredit) * 10000) / 10000);
-    if (diff > 0.0001) {
+    // 2. Check idempotency
+    if (idempotencyKey) {
+      const existingRecord = this.idempotencyIndex.get(`${tenantId}:${idempotencyKey}`);
+      if (existingRecord) {
+        if (!payloadsMatch(existingRecord.payload, { id, description, entries })) {
+          throw new IdempotencyConflictError(
+            `Conflicting payload on idempotency key replay: key "${idempotencyKey}" for tenant "${tenantId}"`
+          );
+        }
+        const existingTx = this.transactions.get(`${tenantId}:${existingRecord.txId}`);
+        if (existingTx) {
+          return structuredClone(existingTx);
+        }
+      }
+    }
+
+    // 3. Enforce transaction ID uniqueness per tenant
+    const txKey = `${tenantId}:${id}`;
+    if (this.transactions.has(txKey)) {
+      throw new DuplicateTransactionIdError(
+        `Transaction with id "${id}" already exists for tenant "${tenantId}"`
+      );
+    }
+
+    // 4. Verify exact double-entry zero sum at 4-decimal precision
+    let totalDebit = 0;
+    let totalCredit = 0;
+    for (const entry of entries) {
+      if (entry.direction === 'debit') totalDebit += entry.amount;
+      else if (entry.direction === 'credit') totalCredit += entry.amount;
+    }
+
+    const debitUnits = Math.round(totalDebit * 10000);
+    const creditUnits = Math.round(totalCredit * 10000);
+    if (debitUnits !== creditUnits) {
       throw new Error(`Unbalanced transaction: debits (${totalDebit}) != credits (${totalCredit})`);
     }
 
-    // 3. Verify all accounts exist and belong to tenant
+    // 5. Verify all accounts exist, belong to tenant, and share identical currency
     const resolvedAccounts = [];
+    let transactionCurrency = null;
+
     for (const entry of entries) {
       const acc = this.getAccount(tenantId, entry.accountId);
       if (!acc) {
         throw new Error(`Account ${entry.accountId} not found for tenant ${tenantId}`);
       }
+      if (transactionCurrency === null) {
+        transactionCurrency = acc.currency;
+      } else if (acc.currency !== transactionCurrency) {
+        throw new CurrencyMismatchError(
+          `Multi-currency transaction requires common settlement currency: found ${transactionCurrency} and ${acc.currency}`
+        );
+      }
       resolvedAccounts.push({ account: acc, entry });
     }
 
-    // 4. Pre-flight Balance & Overdraft Checks (Atomic Evaluation)
-    const simulatedBalances = new Map();
+    // 6. Pre-flight Balance & Overdraft Checks (Atomic Evaluation via Net Aggregated Delta)
+    const accountNetDeltas = new Map();
     for (const { account, entry } of resolvedAccounts) {
-      const currentSimBal = simulatedBalances.has(account.id)
-        ? simulatedBalances.get(account.id)
-        : account.balance;
-
-      let nextSimBal = currentSimBal;
+      const currentDelta = accountNetDeltas.get(account) || 0;
+      let delta = 0;
       if (account.isDebitNormal()) {
-        nextSimBal = entry.direction === 'debit' ? currentSimBal + entry.amount : currentSimBal - entry.amount;
+        delta = entry.direction === 'debit' ? entry.amount : -entry.amount;
       } else {
-        nextSimBal = entry.direction === 'credit' ? currentSimBal + entry.amount : currentSimBal - entry.amount;
+        delta = entry.direction === 'credit' ? entry.amount : -entry.amount;
       }
-      nextSimBal = Math.round(nextSimBal * 10000) / 10000;
-      simulatedBalances.set(account.id, nextSimBal);
+      accountNetDeltas.set(account, currentDelta + delta);
+    }
 
-      const willDecrease = (account.isDebitNormal() && entry.direction === 'credit') ||
-                           (!account.isDebitNormal() && entry.direction === 'debit');
-      if (willDecrease) {
+    for (const [account, netDelta] of accountNetDeltas.entries()) {
+      const finalBalance = Math.round((account.balance + netDelta) * 10000) / 10000;
+      if (finalBalance < 0) {
         const creditLimit = account.creditLimit || 0;
-        const overdraftAllowed = account.overdraftEnabled && nextSimBal >= -creditLimit;
+        const effectiveLimit = account.overdraftEnabled ? creditLimit : 0;
+        const overdraftAllowed = account.overdraftEnabled && finalBalance >= -creditLimit;
 
-        if (nextSimBal < 0 && !overdraftAllowed) {
-          // Record limit breach rejection audit event
+        if (!overdraftAllowed) {
+          const excessAmount = Math.round((Math.abs(finalBalance) - effectiveLimit) * 10000) / 10000;
           this._emitAuditEvent({
             tenantId,
             accountId: account.id,
@@ -159,132 +305,158 @@ export class Ledger {
             currentBalance: account.balance,
             creditLimit,
             details: {
-              requestedAmount: entry.amount,
-              potentialBalance: nextSimBal,
-              excessAmount: Math.round((Math.abs(nextSimBal) - creditLimit) * 10000) / 10000
+              requestedAmount: Math.round(Math.abs(netDelta) * 10000) / 10000,
+              potentialBalance: finalBalance,
+              excessAmount
             }
           });
 
-          // Throw structured Insufficient funds error without modifying any account state
-          const err = new Error(
-            `Insufficient funds: account ${account.id} balance is ${account.balance}, creditLimit is ${creditLimit}, requested ${entry.amount}`
+          const err = new InsufficientFundsError(
+            `Insufficient funds: account ${account.id} balance is ${account.balance}, creditLimit is ${creditLimit}, requested ${Math.round(Math.abs(netDelta) * 10000) / 10000}`
           );
-          err.name = 'InsufficientFundsError';
-          err.code = 'INSUFFICIENT_FUNDS';
           err.tenantId = tenantId;
           err.accountId = account.id;
           err.currentBalance = account.balance;
           err.creditLimit = creditLimit;
-          err.requestedAmount = entry.amount;
+          err.requestedAmount = Math.round(Math.abs(netDelta) * 10000) / 10000;
           throw err;
         }
       }
     }
 
-    // 5. Apply entries and record transitions
+    // 7. Atomic Execution Loop with Snapshot Rollback
+    const balanceSnapshots = new Map();
+    for (const { account } of resolvedAccounts) {
+      if (!balanceSnapshots.has(account)) {
+        balanceSnapshots.set(account, account.balance);
+      }
+    }
+    const auditEventsSnapshotLength = this.auditEvents.length;
+
     let txOverdraftUtilized = false;
     let maxOverdraftAmount = 0;
     let minRemainingCredit = Infinity;
 
-    for (const { account, entry } of resolvedAccounts) {
-      const priorBalance = account.balance;
-      account.applyEntry(entry.amount, entry.direction);
-      const newBalance = account.balance;
+    try {
+      for (const { account, entry } of resolvedAccounts) {
+        const priorBalance = account.balance;
+        account.applyEntry(entry.amount, entry.direction);
+        const newBalance = account.balance;
 
-      // Overdraft telemetry tracking
-      if (newBalance < 0) {
-        txOverdraftUtilized = true;
-        const currentOverdraft = Math.abs(newBalance);
-        if (currentOverdraft > maxOverdraftAmount) maxOverdraftAmount = currentOverdraft;
-        const remCredit = account.getRemainingCredit();
-        if (remCredit < minRemainingCredit) minRemainingCredit = remCredit;
+        // Overdraft telemetry tracking
+        if (newBalance < 0) {
+          const overdraftUtilizedOrDeepened = priorBalance >= 0 || newBalance < priorBalance;
+          if (overdraftUtilizedOrDeepened) {
+            txOverdraftUtilized = true;
+            const currentOverdraft = Math.abs(newBalance);
+            if (currentOverdraft > maxOverdraftAmount) maxOverdraftAmount = currentOverdraft;
+            const remCredit = account.getRemainingCredit();
+            if (remCredit < minRemainingCredit) minRemainingCredit = remCredit;
 
-        if (priorBalance >= 0 || newBalance < priorBalance) {
-          // Transition: NORMAL -> OVERDRAFT or Deepened Overdraft
-          this._emitAuditEvent({
-            tenantId,
-            accountId: account.id,
-            transactionId: id,
-            type: 'OVERDRAFT_UTILIZED',
-            currentBalance: newBalance,
-            creditLimit: account.creditLimit,
-            details: {
-              priorBalance,
-              delta: Math.round((newBalance - priorBalance) * 10000) / 10000,
-              utilizationRatio: account.getOverdraftUtilizationRatio()
-            }
-          });
-
-          // Threshold check
-          const utilRatio = account.getOverdraftUtilizationRatio();
-          if (utilRatio >= account.overdraftAlertThreshold) {
+            // Transition: NORMAL -> OVERDRAFT or Deepened Overdraft
             this._emitAuditEvent({
               tenantId,
               accountId: account.id,
               transactionId: id,
-              type: 'OVERDRAFT_THRESHOLD_EXCEEDED',
+              type: 'OVERDRAFT_UTILIZED',
               currentBalance: newBalance,
               creditLimit: account.creditLimit,
               details: {
-                utilizationRatio: utilRatio,
-                alertThreshold: account.overdraftAlertThreshold,
-                warning: `Account credit utilization has reached ${(utilRatio * 100).toFixed(1)}%`
+                priorBalance,
+                delta: Math.round((newBalance - priorBalance) * 10000) / 10000,
+                utilizationRatio: account.getOverdraftUtilizationRatio()
+              }
+            });
+
+            // Threshold check
+            const utilRatio = account.getOverdraftUtilizationRatio();
+            if (utilRatio >= account.overdraftAlertThreshold) {
+              this._emitAuditEvent({
+                tenantId,
+                accountId: account.id,
+                transactionId: id,
+                type: 'OVERDRAFT_THRESHOLD_EXCEEDED',
+                currentBalance: newBalance,
+                creditLimit: account.creditLimit,
+                details: {
+                  utilizationRatio: utilRatio,
+                  alertThreshold: account.overdraftAlertThreshold,
+                  warning: `Account credit utilization has reached ${(utilRatio * 100).toFixed(1)}%`
+                }
+              });
+            }
+          } else if (newBalance > priorBalance) {
+            // Transition: Partial Overdraft Repayment
+            this._emitAuditEvent({
+              tenantId,
+              accountId: account.id,
+              transactionId: id,
+              type: 'OVERDRAFT_REDUCED',
+              currentBalance: newBalance,
+              creditLimit: account.creditLimit,
+              details: {
+                priorBalance,
+                repaidPortion: Math.round((newBalance - priorBalance) * 10000) / 10000
               }
             });
           }
-        } else if (newBalance > priorBalance) {
-          // Transition: Partial Overdraft Repayment
+        } else if (priorBalance < 0 && newBalance >= 0) {
+          // Transition: OVERDRAFT -> NORMAL (Full Clearance)
           this._emitAuditEvent({
             tenantId,
             accountId: account.id,
             transactionId: id,
-            type: 'OVERDRAFT_REDUCED',
+            type: 'OVERDRAFT_CLEARED',
             currentBalance: newBalance,
             creditLimit: account.creditLimit,
             details: {
               priorBalance,
-              repaidPortion: Math.round((newBalance - priorBalance) * 10000) / 10000
+              clearedDeficit: Math.abs(priorBalance),
+              creditDeposit: entry.amount
             }
           });
         }
-      } else if (priorBalance < 0 && newBalance >= 0) {
-        // Transition: OVERDRAFT -> NORMAL (Full Clearance)
-        this._emitAuditEvent({
-          tenantId,
-          accountId: account.id,
-          transactionId: id,
-          type: 'OVERDRAFT_CLEARED',
-          currentBalance: newBalance,
-          creditLimit: account.creditLimit,
-          details: {
-            priorBalance,
-            clearedDeficit: Math.abs(priorBalance),
-            creditDeposit: entry.amount
+      }
+
+      const txRecord = {
+        id,
+        tenantId,
+        idempotencyKey: idempotencyKey || null,
+        timestamp,
+        description,
+        entries: entries.map(e => ({ ...e })),
+        status: 'POSTED',
+        ...(txOverdraftUtilized && {
+          overdraftUtilized: true,
+          overdraftAmount: maxOverdraftAmount,
+          remainingCredit: minRemainingCredit
+        })
+      };
+
+      this.transactions.set(txKey, txRecord);
+      if (idempotencyKey) {
+        this.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, {
+          txId: id,
+          payload: {
+            id,
+            description: description || '',
+            entries: entries.map(e => ({
+              accountId: e.accountId,
+              amount: e.amount,
+              direction: e.direction,
+              ...(e.tenantId ? { tenantId: e.tenantId } : {})
+            }))
           }
         });
       }
+
+      return structuredClone(txRecord);
+    } catch (err) {
+      for (const [acc, origBal] of balanceSnapshots.entries()) {
+        acc.balance = origBal;
+      }
+      this.auditEvents.length = auditEventsSnapshotLength;
+      throw err;
     }
-
-    const txRecord = {
-      id,
-      tenantId,
-      idempotencyKey: idempotencyKey || null,
-      timestamp,
-      description,
-      entries: entries.map(e => ({ ...e })),
-      status: 'POSTED',
-      ...(txOverdraftUtilized && {
-        overdraftUtilized: true,
-        overdraftAmount: maxOverdraftAmount,
-        remainingCredit: minRemainingCredit
-      })
-    };
-
-    this.transactions.set(id, txRecord);
-    if (idempotencyKey) {
-      this.idempotencyIndex.set(`${tenantId}:${idempotencyKey}`, id);
-    }
-
-    return txRecord;
   }
 }

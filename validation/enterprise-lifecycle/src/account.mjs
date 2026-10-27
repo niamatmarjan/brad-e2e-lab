@@ -1,3 +1,23 @@
+export class InvalidPrecisionError extends RangeError {
+  constructor(message = 'Value exceeds maximum precision of 4 decimal places') {
+    super(message);
+    this.name = 'InvalidPrecisionError';
+    this.code = 'INVALID_PRECISION';
+  }
+}
+
+function validateDelimiter(val, name) {
+  if (typeof val === 'string' && val.includes(':')) {
+    throw new TypeError(`${name} must not contain delimiter ":"`);
+  }
+}
+
+function validatePrecision(val, name) {
+  if (Math.abs(val * 10000 - Math.round(val * 10000)) >= 1e-9) {
+    throw new InvalidPrecisionError(`${name} exceeds maximum precision of 4 decimal places`);
+  }
+}
+
 export class Account {
   constructor({
     id,
@@ -11,9 +31,13 @@ export class Account {
     if (!id || typeof id !== 'string') {
       throw new TypeError('Account id must be a non-empty string');
     }
+    validateDelimiter(id, 'Account id');
+
     if (!tenantId || typeof tenantId !== 'string') {
       throw new TypeError('tenantId must be a non-empty string');
     }
+    validateDelimiter(tenantId, 'tenantId');
+
     const validTypes = ['asset', 'liability', 'equity', 'revenue', 'expense'];
     if (!validTypes.includes(type)) {
       throw new TypeError(`Invalid account type: ${type}. Must be one of ${validTypes.join(', ')}`);
@@ -21,6 +45,8 @@ export class Account {
     if (typeof creditLimit !== 'number' || creditLimit < 0 || !Number.isFinite(creditLimit)) {
       throw new TypeError('creditLimit must be a non-negative finite number');
     }
+    validatePrecision(creditLimit, 'creditLimit');
+
     if (overdraftEnabled !== undefined && typeof overdraftEnabled !== 'boolean') {
       throw new TypeError('overdraftEnabled must be a boolean');
     }
@@ -72,6 +98,7 @@ export class Account {
       if (typeof creditLimit !== 'number' || creditLimit < 0 || !Number.isFinite(creditLimit)) {
         throw new TypeError('creditLimit must be a non-negative finite number');
       }
+      validatePrecision(creditLimit, 'creditLimit');
     }
     if (overdraftEnabled !== undefined) {
       if (typeof overdraftEnabled !== 'boolean') {
@@ -116,6 +143,8 @@ export class Account {
     if (typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
       throw new TypeError('Amount must be a positive finite number');
     }
+    validatePrecision(amount, 'Amount');
+
     if (direction !== 'debit' && direction !== 'credit') {
       throw new TypeError('Direction must be either debit or credit');
     }
