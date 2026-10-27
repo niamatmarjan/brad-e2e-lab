@@ -277,7 +277,8 @@ setInterval(() => {}, 100);
       branch_preserved: branchPreserved,
       duplicate_branch_prevented: duplicatePrevented,
       recovery_completed: true,
-      crash_signal: 'SIGKILL'
+      crash_signal: 'SIGKILL',
+      recovery_classification: 'NODE_WORKER_SIGKILL_FIXTURE_PASS'
     };
   } catch (err) {
     try { rmSync(repoDir, { recursive: true, force: true }); } catch {}
@@ -343,7 +344,8 @@ export function testConcurrentBranchCollision() {
     return {
       conflict_detected: conflictCaught,
       safe_rollback_performed: true,
-      working_tree_clean: isClean
+      working_tree_clean: isClean,
+      concurrency_classification: 'GIT_MERGE_CONFLICT_FIXTURE_PASS'
     };
   } catch (err) {
     try { rmSync(isolatedDir, { recursive: true, force: true }); } catch {}

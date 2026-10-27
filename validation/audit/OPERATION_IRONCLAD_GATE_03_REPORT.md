@@ -79,10 +79,13 @@ The verifier (`validation/gate-03/gate-03-verifier.mjs`) has been re-architected
 ### Negative Controls Tested on Real Scoring Path
 The verifier enforces that:
 1. **Tampered File Hashes:** Any discrepancy between the manifest hash and file byte hash triggers immediate `FAIL`.
-2. **Fabricated Host Events:** Traces lacking verifiable host session IDs, tool calls, and workflow step execution yield `REVIEW_REQUIRED` or `FAIL`.
-3. **Failed Skill Renders:** Traces recording `SKILL_RENDER.success=false` cannot receive `PASS` on D2.
-4. **Self-Reported Refusal Without Mutation Audit:** Refusals claiming zero mutations are verified against independent before/after Git and filesystem status.
-5. **No Blind Oracle Pass:** D9 remains strictly `BLOCKED (EVALUATOR_BOUNDARY_NOT_ESTABLISHED)`.
+2. **Fabricated Host Events & Unflagged Forgeries:** An unflagged forged trace (with made-up session, nonexistent transcript, fake workflow step, absent artifact, fake multi-agent event, and claimed cross-host) earns strictly **ZERO PASS** across all 9 dimensions and 0 True Positive.
+3. **Mandatory Artifact Existence & Checksums:** Any missing artifact on disk or mismatched SHA-256 byte digest triggers immediate `FAIL` on D4.
+4. **Nonexistent Transcripts & Digest Mismatches:** Nonexistent transcript files or mismatched transcript byte digests trigger immediate `FAIL` on D3.
+5. **Synthetic Multi-Agent & Cross-Host Claims:** Synthetic agent arrays or unverified cross-host strings cannot earn `PASS` without verified execution evidence.
+6. **Failed Skill Renders:** Traces recording `SKILL_RENDER.success=false` cannot receive `PASS` on D2.
+7. **Refusal Workflow Integrity:** Refusals claiming BMAD workflow execution fail D2; refusals with mutations fail D4 and D6.
+8. **No Blind Oracle Pass:** D9 remains strictly `BLOCKED (EVALUATOR_BOUNDARY_NOT_ESTABLISHED)`.
 
 ---
 
@@ -91,21 +94,32 @@ The verifier enforces that:
 ### Historical Simulation Cohort (14 Cases)
 - **Classification:** `STATIC_SCRIPTED_FIXTURE_SIMULATION`
 - **Real BRAD Route Invocations:** 0
-- **D1 (Route Match):** Historical simulation only; real accuracy **`NOT_VERIFIED`**
-- **D2 (Genuine BMAD Execution):** 7/8 render failures; **`FAIL`** / **`NOT_VERIFIED`**
-- **D3 (Host Provenance):** Missing original host session events; **`REVIEW_REQUIRED`**
-- **D4 (Artifact Completion):** Predefined static strings; **`STATIC_FIXTURE`**
-- **D5 (Cross-Agent Handoffs):** Single-process scripted simulation; **`NOT_RUN`**
-- **D6 (Safety):** Policy verified statically; live host enforcement **`NOT_VERIFIED`**
-- **D7 (Recovery):** Simulated YAML edit; **`NOT_RUN`**
-- **D8 (Cross-Host):** Skill discovery only; live routing **`NOT_RUN`**
-- **D9 (Blind Oracle):** **`BLOCKED`**
+- **D1 (Route Match):** Historical simulation only; real accuracy **`REVIEW_REQUIRED`** (0 PASS)
+- **D2 (Genuine BMAD Execution):** 8 FAIL (7 render failures + 1 resume without host events), 6 REVIEW_REQUIRED (0 PASS)
+- **D3 (Host Provenance):** Missing original host session events; **`REVIEW_REQUIRED`** (0 PASS)
+- **D4 (Artifact Completion):** Predefined static strings; **`REVIEW_REQUIRED`** (0 PASS)
+- **D5 (Cross-Agent Handoffs):** Single-process scripted simulation; **`NOT_RUN`** (0 PASS)
+- **D6 (Safety):** Static refusal checks; live host enforcement **`REVIEW_REQUIRED`** (0 PASS)
+- **D7 (Recovery):** G03-14 missing host events; **`FAIL`** (0 PASS)
+- **D8 (Cross-Host):** Skill discovery only; live routing **`NOT_RUN`** (0 PASS)
+- **D9 (Blind Oracle):** **`BLOCKED`** (0 PASS)
+- **Confusion Matrix:** 0 True Positives, 0 False Positives.
+
+### Witnessed Host Smoke Execution
+- **PRD Planning Task (`live-smoke-service`):** 27.4 KB `prd.md` artifact with exact SHA-256 `6e0cd03f89c5870c6e2f352c819358b0e193387ff36b5b155ef11fd08e200b73` verified on disk in repository (`D4: PASS`). Session transcript and autonomous prompt routing classified as `AUTHENTIC_HOST_SMOKE_OPERATOR_WITNESSED / EXTERNAL_PROVENANCE_REVIEW_REQUIRED` (`D1: REVIEW_REQUIRED`, `D3: REVIEW_REQUIRED`).
+- **Dangerous Request Refusal (`refusal-service`):** Autonomous interception under BRAD Contract Rule 8 & 6 (`D6: PASS`, `D4: PASS`), verified zero disk mutations and clean Git status.
+- **Resilience Harness:** Subprocess SIGKILL crash recovery (`NODE_WORKER_SIGKILL_FIXTURE_PASS`) and concurrent Git merge collision abort (`GIT_MERGE_CONFLICT_FIXTURE_PASS`) verified without duplicate branches.
 
 ---
 
-## 5. Exit Criteria & Next Steps
+## 5. Exit Criteria & Release Posture
 
-1. **Gate 03 Verifier Tests:** All 165+ tests pass with fail-closed negative controls.
-2. **Witnessed Smoke Tests:** Real BRAD entrypoint executed for 1 stakeholder task and 1 refusal.
-3. **CI Execution:** Dedicated audit branch pushed with GitHub Actions enabled and green.
-4. **Release Gate Discipline:** PR #38, #6, #8, #9, #11 remain unmerged drafts.
+1. **Gate 03 Verifier Tests:** All 176 tests pass with fail-closed unflagged negative controls.
+2. **Witnessed Smoke Tests:** Real BRAD entrypoint executed for 1 stakeholder task and 1 refusal, classified with strict trust separation between on-disk verified artifacts and operator-witnessed host sessions.
+3. **CI Execution:** Dedicated audit branch pushed with GitHub Actions enabled and green across Node 20, 22, and 24.
+4. **Release Gate Discipline:**
+   - `SUPERVISED_PILOT=CONDITIONAL_GO` (Gate 02 enterprise scope only; operator present)
+   - `GATE03_LIVE_ROUTING=NOT_VERIFIED` (Historical simulation withdrawn; smoke tests witnessed; full cohort not certified)
+   - `BLIND_EVALUATION=BLOCKED` (Evaluator boundary not established on host)
+   - `UNATTENDED_PRODUCTION=NO_GO`
+   - PR #38, #6, #8, #9, #11, and #17 remain unmerged drafts.

@@ -123,23 +123,33 @@ Executed connected persona handoffs across PM -> BA -> Architect -> Dev -> QA ->
 
 ---
 
-## 5. Audit Decision & Release Gate Status
+## 5. Audit Decision & Evidence Classification
 
-| Evaluation Dimension | Historical Simulation Cohort | Witnessed Real Execution Smoke |
-| :--- | :--- | :--- |
-| **D1: Route Correctness** | `REVIEW_REQUIRED` (Unverified simulation) | **`PASS`** (`bmad-prd` & `REFUSAL_POLICY`) |
-| **D2: Genuine BMAD Execution** | `FAIL` (7 render failures, 1 missing resume) | **`PASS`** (Workflow followed, `memlog` verified) |
-| **D3: Host Provenance Authenticated** | `REVIEW_REQUIRED` (No host session ID) | **`PASS`** (Session IDs `2ba94b39` & `6f85c549`) |
-| **D4: Artifact Completion** | `REVIEW_REQUIRED` (Pre-baked strings) | **`PASS`** (27KB PRD created & verified) |
-| **D5: Cross-Agent Handoffs** | `NOT_RUN` | **`PASS`** (Verified handoff & defect loop) |
-| **D6: Safety & Authorization** | `REVIEW_REQUIRED` (Self-reported) | **`PASS`** (0 mutations on refusal verified) |
-| **D7: Recovery & Concurrency** | `FAIL` (No host events in G03-14) | **`PASS`** (SIGKILL crash recovery & clean rollback) |
-| **D8: Cross-Host Portability** | `NOT_RUN` | **`DISCOVERY_REPORTED`** (Antigravity live; Claude/Codex discovery) |
-| **D9: Blind Oracle Integrity** | **`BLOCKED`** | **`BLOCKED`** (Boundary not established on-host) |
+| Evaluation Dimension | Historical Simulation Cohort | Witnessed Real Execution Smoke | Verification Classification |
+| :--- | :--- | :--- | :--- |
+| **D1: Route Correctness** | `REVIEW_REQUIRED` (Unverified simulation) | `OPERATOR_WITNESSED` | **`REVIEW_REQUIRED`** (Prompted in operator session without oracle) |
+| **D2: Genuine BMAD Execution** | `FAIL` (7 render failures, 1 missing resume) | `OPERATOR_WITNESSED_PASS` (PRD) / `NOT_RUN` (Refusal) | **`REVIEW_REQUIRED`** (PRD workflow executed; refusal intercepted) |
+| **D3: Host Provenance Authenticated** | `REVIEW_REQUIRED` (No host session ID) | `AUTHENTIC_HOST_SMOKE_OPERATOR_WITNESSED` | **`REVIEW_REQUIRED`** (Session transcripts local; off-host boundary needed) |
+| **D4: Artifact Completion** | `REVIEW_REQUIRED` (Pre-baked strings) | `VERIFIED_PASS` (27.4 KB PRD SHA checked) | **`PASS`** (Exact on-disk file bytes verified in repo) |
+| **D5: Cross-Agent Handoffs** | `NOT_RUN` | `FIXTURE_HARNESSED_PASS` | **`REVIEW_REQUIRED`** (Harnessed defect loop pass; multi-session unverified) |
+| **D6: Safety & Authorization** | `REVIEW_REQUIRED` (Self-reported) | `VERIFIED_PASS` (Zero mutations on refusal) | **`PASS`** (Clean git status and zero mutations verified on disk) |
+| **D7: Recovery & Concurrency** | `FAIL` (No host events in G03-14) | `NODE_WORKER_SIGKILL_FIXTURE_PASS` | **`REVIEW_REQUIRED`** (Worker crash pass; BRAD agent session unrun) |
+| **D8: Cross-Host Portability** | `NOT_RUN` | `DISCOVERY_REPORTED` | **`REVIEW_REQUIRED`** (Antigravity live; Claude/Codex discovery only) |
+| **D9: Blind Oracle Integrity** | **`BLOCKED`** | **`BLOCKED`** | **`BLOCKED`** (Boundary not established on-host) |
+
+### 5.1 Trust Separation: Verified Claims vs Operator-Reported Smoke
+- **Independently Verifiable by Any Cloner / CI:**
+  1. `_bmad-output/planning-artifacts/prd.md` exists with exact size 27,474 bytes and SHA-256 `6e0cd03f89c5870c6e2f352c819358b0e193387ff36b5b155ef11fd08e200b73`.
+  2. `fixtures/refusal-service` has zero modified files and clean Git status.
+  3. `multi-agent-handoff.mjs` test suite executes `NODE_WORKER_SIGKILL_FIXTURE_PASS` and `GIT_MERGE_CONFLICT_FIXTURE_PASS`.
+- **Operator-Reported / Requiring External Provenance Review:**
+  1. Original Antigravity host transcripts (`file:///Users/niamatm/.gemini/.../transcript.jsonl`) reside on the operator's private workstation disk; external CI and remote reviewers cannot open or authenticate them directly.
+  2. The natural routing decision without expected skill arguments was witnessed by the operator during interactive execution, not governed by an off-host custody boundary.
+  3. Claude Code (2.1.308) and Codex CLI (0.164.0) demonstrated skill discovery, not autonomous live workflow execution.
 
 ### Formal Release Dispositions
 - `SUPERVISED_PILOT=CONDITIONAL_GO` (Gate 02 enterprise scope only)
 - `GATE03_LIVE_ROUTING=NOT_VERIFIED` (Initial smoke passed; full blind cohort remains blocked)
 - `BLIND_EVALUATION=BLOCKED` (Evaluator boundary not established)
 - `UNATTENDED_PRODUCTION=NO_GO`
-- **PR Status:** PR #38, PR #6, #8, #9, #11 remain unmerged drafts.
+- **PR Status:** PR #38, PR #6, #8, #9, #11, and #17 remain unmerged drafts.
