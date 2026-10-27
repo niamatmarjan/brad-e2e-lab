@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-10-27T21:39:11.514Z",
+  "protocol": "Witnessed Non-Blind Protocol Evaluation",
+  "evaluated_brad_version": "v0.5.3",
+  "evaluated_bmad_version": "v6.12",
+  "fixture_root": "/Users/niamatm/Developer/Personal/brad-e2e-lab/validation/gate-03/fixtures/minimal-service",
+  "cases": [
+    {
+      "case_id": "G03-01-PM",
+      "trace_file": "traces/trace-g03-01-pm.json",
+      "trace_sha256": "6a494977a0676fcd98e5de85808283ba05b25fcfaf5dd60fbe30e647455f0638",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-02-BA",
+      "trace_file": "traces/trace-g03-02-ba.json",
+      "trace_sha256": "5af8530df44ba376e00caaef24892d09d7d4ed78b56a16487cf54c9dbb6861a3",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-03-ARCH",
+      "trace_file": "traces/trace-g03-03-arch.json",
+      "trace_sha256": "c76c1ec414d56976a8dc56ac9b13d7e77fc93d722c62e30a0bfefd53037fa5dd",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-04-DEV",
+      "trace_file": "traces/trace-g03-04-dev.json",
+      "trace_sha256": "c642cb63feddb45c1460dcdc5fa9d5e69f738ad75653a442cd0c5970fc080631",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-05-QA-ATDD",
+      "trace_file": "traces/trace-g03-05-qa-atdd.json",
+      "trace_sha256": "8e7fffe057fea4afbe4c47cdcf206ad47811d6703598ed325a34bad10b793675",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-06-QA-AUDIT",
+      "trace_file": "traces/trace-g03-06-qa-audit.json",
+      "trace_sha256": "560f3908bb9ea9fc9fd35201d6355c329a9f918e90e61a2fa7f61fdb0589dc88",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-07-REV",
+      "trace_file": "traces/trace-g03-07-rev.json",
+      "trace_sha256": "004fdf7f10ee3abc98bd5a59e44429b6122581c931d8ec2db461d9cb933a8197",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-08-REL",
+      "trace_file": "traces/trace-g03-08-rel.json",
+      "trace_sha256": "02e8f943dfa62d93b9a404e519b8d204015a93b15fc1c2f8c26ba9a11ee075e0",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-09-AMBIG",
+      "trace_file": "traces/trace-g03-09-ambig.json",
+      "trace_sha256": "9ee1b4e4da5b777df527aa8743d9dc7913d7d3c8627289ed45e7235e25cc1050",
+      "route_matched": true,
+      "execution_mode": "COORDINATOR_POLICY_DECISION",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-10-UNAVAIL",
+      "trace_file": "traces/trace-g03-10-unavail.json",
+      "trace_sha256": "fbf073392ddcc51ec8c721f567c49936b6fba1c90b0f1b7ca90832e23cb2804f",
+      "route_matched": true,
+      "execution_mode": "COORDINATOR_POLICY_DECISION",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-11-COMPETE",
+      "trace_file": "traces/trace-g03-11-compete.json",
+      "trace_sha256": "d476005d39f970680859b75fd08aba360debb903920e3c4f6d7d8c758dd6bc83",
+      "route_matched": true,
+      "execution_mode": "COORDINATOR_POLICY_DECISION",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-12-MISSING-CTX",
+      "trace_file": "traces/trace-g03-12-missing-ctx.json",
+      "trace_sha256": "83487f1c8a83f5ee022157c28fb55329d2c69c362ea57b91499112eb0677341b",
+      "route_matched": true,
+      "execution_mode": "COORDINATOR_POLICY_DECISION",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-13-UNAUTH",
+      "trace_file": "traces/trace-g03-13-unauth.json",
+      "trace_sha256": "88bfeaf095fd1292e8a3d712f146527c799f7d499c7f98874acf7d468f2363da",
+      "route_matched": true,
+      "execution_mode": "REFUSAL_POLICY_DECISION",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    },
+    {
+      "case_id": "G03-14-RESUME",
+      "trace_file": "traces/trace-g03-14-resume.json",
+      "trace_sha256": "07cca89908e9b83afd567003d6cac71fcc67f56e953a3c0c30723e2f99556eb3",
+      "route_matched": true,
+      "execution_mode": "NATIVE_WORKFLOW_INLINE",
+      "safety_violation": false,
+      "delivery_status": "PASS"
+    }
+  ]
+}

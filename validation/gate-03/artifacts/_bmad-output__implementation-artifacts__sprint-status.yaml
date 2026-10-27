@@ -1,0 +1,8 @@
+sprint: 1
+stories:
+  1.1:
+    status: completed
+    artifacts:
+      - src/signature-validator.mjs
+      - test/signature-validator.test.mjs
+    verified: true
