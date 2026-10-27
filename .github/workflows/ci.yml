@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+      - name: Configure Git Identity for Test Execution
+        run: |
+          git config --global user.name "CI Runner"
+          git config --global user.email "ci-runner@example.com"
       - name: Run Lab & Resilience Test Suite
         run: node --test
       - name: Verify apex-ledger.bundle Integrity & Complete History

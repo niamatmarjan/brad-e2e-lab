@@ -11,6 +11,10 @@ const BUNDLE_PATH = path.resolve('validation/enterprise-lifecycle/apex-ledger.bu
 function getCleanEnv() {
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  env.GIT_AUTHOR_NAME = 'CI Agent';
+  env.GIT_AUTHOR_EMAIL = 'ci-agent@example.com';
+  env.GIT_COMMITTER_NAME = 'CI Agent';
+  env.GIT_COMMITTER_EMAIL = 'ci-agent@example.com';
   return env;
 }
 
@@ -22,16 +26,16 @@ test('Resilience 1: apex-ledger.bundle integrity, complete history, and restorat
 
   try {
     // Initialize temporary repo to verify bundle
-    execSync('git init', { cwd: tempRepo, stdio: 'pipe' });
-    const verifyOutput = execSync(`git bundle verify "${BUNDLE_PATH}" 2>&1`, { cwd: tempRepo, shell: '/bin/bash' }).toString();
+    execSync('git init', { cwd: tempRepo, stdio: 'pipe', env: getCleanEnv() });
+    const verifyOutput = execSync(`git bundle verify "${BUNDLE_PATH}" 2>&1`, { cwd: tempRepo, shell: '/bin/bash', env: getCleanEnv() }).toString();
     assert.ok(verifyOutput.includes('is okay'), 'Bundle verification must confirm bundle is okay');
     assert.ok(verifyOutput.includes('The bundle records a complete history'), 'Bundle must record complete history');
 
     // Restore from bundle
-    execSync(`git clone "${BUNDLE_PATH}" "${tempClone}"`, { stdio: 'pipe' });
+    execSync(`git clone "${BUNDLE_PATH}" "${tempClone}"`, { stdio: 'pipe', env: getCleanEnv() });
 
     // Verify commit count and branches
-    const logOutput = execSync('git log --oneline --all', { cwd: tempClone, stdio: 'pipe' }).toString();
+    const logOutput = execSync('git log --oneline --all', { cwd: tempClone, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.ok(logOutput.includes('chore(baseline): initialize apex-ledger enterprise application'), 'Must contain baseline commit');
     assert.ok(logOutput.includes('docs(release): publish supervised release readiness decision'), 'Must contain release decision commit');
 
@@ -48,8 +52,8 @@ test('Resilience 2: Interrupted-session recovery through task completion to acce
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'resilience-resume-'));
   try {
     // 1. Clone baseline from bundle
-    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe' });
-    execSync('git checkout -b feature/story-3-1-interrupted', { cwd: sandbox, stdio: 'pipe' });
+    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe', env: getCleanEnv() });
+    execSync('git checkout -b feature/story-3-1-interrupted', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() });
 
     // 2. Simulate interrupted mid-flight developer work: partial code and failing test written before crash
     const unfinishedTestPath = path.join(sandbox, 'test', 'interrupted-task.test.mjs');
@@ -76,7 +80,7 @@ test('Story 3.1: Account freeze policy flag prevents new debits', () => {
     assert.ok(failedInitially, 'Incomplete task must initially fail');
 
     // Check git status shows in-flight uncommitted modification
-    const statusBefore = execSync('git status -s', { cwd: sandbox, stdio: 'pipe' }).toString();
+    const statusBefore = execSync('git status -s', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.ok(statusBefore.includes('test/interrupted-task.test.mjs'), 'In-flight work must be present in working tree');
 
     // 3. Resumption Agent steps in: inspects in-flight work, preserves working tree, completes implementation
@@ -107,17 +111,17 @@ test('Story 3.1: Account freeze policy flag prevents new debits', () => {
 
     // 4. Verify test now passes (GREEN)
     const testResumeOutput = execSync('node --test test/interrupted-task.test.mjs', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString();
-    assert.ok(testResumeOutput.includes('pass'), 'Resumed task test must pass');
+    assert.ok(testResumeOutput.includes('pass 1'), 'Resumed task test must pass');
 
     // 5. Complete task to acceptance: commit the completed feature
-    execSync('git add test/interrupted-task.test.mjs src/ledger.mjs', { cwd: sandbox, stdio: 'pipe' });
-    execSync('git commit -m "feat(ledger): complete Story 3.1 account freeze after session resumption"', { cwd: sandbox, stdio: 'pipe' });
+    execSync('git add test/interrupted-task.test.mjs src/ledger.mjs', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() });
+    execSync('git commit -m "feat(ledger): complete Story 3.1 account freeze after session resumption"', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() });
 
     // 6. Verify working tree is clean and commit is established
-    const statusAfter = execSync('git status -s', { cwd: sandbox, stdio: 'pipe' }).toString();
+    const statusAfter = execSync('git status -s', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.equal(statusAfter.trim(), '', 'Working tree must be clean after acceptance commit');
 
-    const logAfter = execSync('git log -n 1 --oneline', { cwd: sandbox, stdio: 'pipe' }).toString();
+    const logAfter = execSync('git log -n 1 --oneline', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.ok(logAfter.includes('feat(ledger): complete Story 3.1 account freeze'), 'Task must reach accepted committed state');
   } finally {
     fs.rmSync(sandbox, { recursive: true, force: true });
@@ -127,10 +131,10 @@ test('Story 3.1: Account freeze policy flag prevents new debits', () => {
 test('Resilience 3: Duplicate-work prevention on session restart', () => {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'resilience-dup-prevention-'));
   try {
-    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe' });
+    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe', env: getCleanEnv() });
 
     // Inspect existing commit history for Story 2.1
-    const commits = execSync('git log --oneline', { cwd: sandbox, stdio: 'pipe' }).toString();
+    const commits = execSync('git log --oneline', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString();
     const hasStory21 = commits.includes('feat(ledger): implement credit overdraft execution and audit trail (Story 2.1)');
     assert.ok(hasStory21, 'Story 2.1 commit must already be present in history');
 
@@ -139,8 +143,8 @@ test('Resilience 3: Duplicate-work prevention on session restart', () => {
     assert.ok(testResult.includes('pass'), 'Existing tests pass');
 
     // Verify duplicate work is prevented: zero redundant commits generated
-    const commitCountBefore = execSync('git rev-list --count HEAD', { cwd: sandbox, stdio: 'pipe' }).toString().trim();
-    const commitCountAfter = execSync('git rev-list --count HEAD', { cwd: sandbox, stdio: 'pipe' }).toString().trim();
+    const commitCountBefore = execSync('git rev-list --count HEAD', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString().trim();
+    const commitCountAfter = execSync('git rev-list --count HEAD', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() }).toString().trim();
     assert.equal(commitCountBefore, commitCountAfter, 'Duplicate work prevented; no redundant commits generated');
   } finally {
     fs.rmSync(sandbox, { recursive: true, force: true });
@@ -154,46 +158,46 @@ test('Resilience 4: Concurrent write conflicts, branch collision, and safe rollb
 
   try {
     // 1. Setup shared upstream bare repo from bundle
-    execSync(`git clone --bare "${BUNDLE_PATH}" "${upstream}"`, { stdio: 'pipe' });
+    execSync(`git clone --bare "${BUNDLE_PATH}" "${upstream}"`, { stdio: 'pipe', env: getCleanEnv() });
 
     // 2. Clone into Agent 1 and Agent 2 workspaces
-    execSync(`git clone "${upstream}" "${agent1}"`, { stdio: 'pipe' });
-    execSync(`git clone "${upstream}" "${agent2}"`, { stdio: 'pipe' });
+    execSync(`git clone "${upstream}" "${agent1}"`, { stdio: 'pipe', env: getCleanEnv() });
+    execSync(`git clone "${upstream}" "${agent2}"`, { stdio: 'pipe', env: getCleanEnv() });
 
     // Ensure main branch is checked out in both
-    execSync('git checkout main', { cwd: agent1, stdio: 'pipe' });
-    execSync('git checkout main', { cwd: agent2, stdio: 'pipe' });
+    execSync('git checkout main', { cwd: agent1, stdio: 'pipe', env: getCleanEnv() });
+    execSync('git checkout main', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
 
     // 3. Agent 1 makes a commit on main and pushes
     const file1 = path.join(agent1, 'agent-note.txt');
     fs.writeFileSync(file1, 'Agent 1 note\n');
-    execSync('git add agent-note.txt', { cwd: agent1, stdio: 'pipe' });
-    execSync('git commit -m "docs: agent 1 updates note"', { cwd: agent1, stdio: 'pipe' });
-    execSync('git push origin main', { cwd: agent1, stdio: 'pipe' });
+    execSync('git add agent-note.txt', { cwd: agent1, stdio: 'pipe', env: getCleanEnv() });
+    execSync('git commit -m "docs: agent 1 updates note"', { cwd: agent1, stdio: 'pipe', env: getCleanEnv() });
+    execSync('git push origin main', { cwd: agent1, stdio: 'pipe', env: getCleanEnv() });
 
     // 4. Agent 2 concurrently creates a different commit on main without pulling
     const file2 = path.join(agent2, 'agent-note.txt');
     fs.writeFileSync(file2, 'Agent 2 conflicting note\n');
-    execSync('git add agent-note.txt', { cwd: agent2, stdio: 'pipe' });
-    execSync('git commit -m "docs: agent 2 conflicting note"', { cwd: agent2, stdio: 'pipe' });
+    execSync('git add agent-note.txt', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
+    execSync('git commit -m "docs: agent 2 conflicting note"', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
 
     // 5. Agent 2 attempts to push -> Rejected by remote (non-fast-forward conflict)
     let pushFailed = false;
     try {
-      execSync('git push origin main', { cwd: agent2, stdio: 'pipe' });
+      execSync('git push origin main', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
     } catch {
       pushFailed = true;
     }
     assert.ok(pushFailed, 'Push must fail closed on non-fast-forward concurrent conflict');
 
     // 6. Safe rollback: Agent 2 detects conflict, refuses to force-push, rolls back unpushed commit safely
-    execSync('git reset --hard origin/main', { cwd: agent2, stdio: 'pipe' });
-    const statusAgent2 = execSync('git status -s', { cwd: agent2, stdio: 'pipe' }).toString();
+    execSync('git reset --hard origin/main', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
+    const statusAgent2 = execSync('git status -s', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.equal(statusAgent2.trim(), '', 'Agent 2 working tree must be clean after rollback');
 
     // 7. Pull upstream changes cleanly
-    execSync('git pull origin main', { cwd: agent2, stdio: 'pipe' });
-    const logAgent2 = execSync('git log -n 1 --oneline', { cwd: agent2, stdio: 'pipe' }).toString();
+    execSync('git pull origin main', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() });
+    const logAgent2 = execSync('git log -n 1 --oneline', { cwd: agent2, stdio: 'pipe', env: getCleanEnv() }).toString();
     assert.ok(logAgent2.includes('docs: agent 1 updates note'), 'Agent 2 cleanly synchronized with upstream without data corruption');
   } finally {
     fs.rmSync(upstream, { recursive: true, force: true });
@@ -205,7 +209,7 @@ test('Resilience 4: Concurrent write conflicts, branch collision, and safe rollb
 test('Resilience 5: Disentangling OS/Git low-level lock defense from multi-agent workflow resilience', () => {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'resilience-lock-distinction-'));
   try {
-    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe' });
+    execSync(`git clone "${BUNDLE_PATH}" "${sandbox}"`, { stdio: 'pipe', env: getCleanEnv() });
 
     // Case A: Low-level Git index lock failure (OS-level primitive)
     const lockFile = path.join(sandbox, '.git', 'index.lock');
@@ -213,7 +217,7 @@ test('Resilience 5: Disentangling OS/Git low-level lock defense from multi-agent
 
     let lockBlocked = false;
     try {
-      execSync('git commit -m "should fail due to lock"', { cwd: sandbox, stdio: 'pipe' });
+      execSync('git commit -m "should fail due to lock"', { cwd: sandbox, stdio: 'pipe', env: getCleanEnv() });
     } catch {
       lockBlocked = true;
     }
