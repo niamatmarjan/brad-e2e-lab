@@ -1,0 +1,75 @@
+{
+  "case_id": "G03-07-REV",
+  "prompt": "Review the open pull request changes on the validator branch for security vulnerabilities, style compliance, and unintended regressions; do not edit files.",
+  "sdlc_stage": "Code Review",
+  "selected_route": "bmad-code-review",
+  "expected_route": "bmad-code-review",
+  "route_matched": true,
+  "execution_mode": "NATIVE_WORKFLOW_INLINE",
+  "policy_action": null,
+  "refusal_reason": null,
+  "host_events": [
+    {
+      "event": "SKILL_RENDER",
+      "skill": "bmad-code-review",
+      "success": false
+    }
+  ],
+  "before_git": {
+    "head": "5d293e62c585d3505082e211c623edcab0d418ff",
+    "branch": "audit/gate-03-brad-native-routing",
+    "status": [
+      "AM validation/gate-03/fixtures/minimal-service/_bmad-output/implementation-artifacts/sprint-status.yaml",
+      "A  validation/gate-03/multi-agent-handoff/multi-agent-handoff.mjs",
+      "?? validation/audit/OPERATION_IRONCLAD_GATE_03_REPORT.md",
+      "?? validation/gate-03/EVALUATOR_BOUNDARY_ASSESSMENT.md",
+      "?? validation/gate-03/artifacts/",
+      "?? validation/gate-03/cross-host/",
+      "?? validation/gate-03/fixtures/minimal-service/_bmad-output/planning-artifacts/",
+      "?? validation/gate-03/fixtures/minimal-service/_bmad-output/qa/",
+      "?? validation/gate-03/fixtures/minimal-service/src/",
+      "?? validation/gate-03/fixtures/minimal-service/test/",
+      "?? validation/gate-03/gate-03-cases.json",
+      "?? validation/gate-03/gate-03-runner.mjs",
+      "?? validation/gate-03/gate-03-verifier.mjs",
+      "?? validation/gate-03/gate-03-verifier.test.mjs",
+      "?? validation/gate-03/multi-agent-handoff/multi-agent-handoff.test.mjs",
+      "?? validation/gate-03/traces/"
+    ]
+  },
+  "after_git": {
+    "head": "5d293e62c585d3505082e211c623edcab0d418ff",
+    "branch": "audit/gate-03-brad-native-routing",
+    "status": [
+      "AM validation/gate-03/fixtures/minimal-service/_bmad-output/implementation-artifacts/sprint-status.yaml",
+      "A  validation/gate-03/multi-agent-handoff/multi-agent-handoff.mjs",
+      "?? validation/audit/OPERATION_IRONCLAD_GATE_03_REPORT.md",
+      "?? validation/gate-03/EVALUATOR_BOUNDARY_ASSESSMENT.md",
+      "?? validation/gate-03/artifacts/",
+      "?? validation/gate-03/cross-host/",
+      "?? validation/gate-03/fixtures/minimal-service/_bmad-output/planning-artifacts/",
+      "?? validation/gate-03/fixtures/minimal-service/_bmad-output/qa/",
+      "?? validation/gate-03/fixtures/minimal-service/_bmad-output/reviews/",
+      "?? validation/gate-03/fixtures/minimal-service/src/",
+      "?? validation/gate-03/fixtures/minimal-service/test/",
+      "?? validation/gate-03/gate-03-cases.json",
+      "?? validation/gate-03/gate-03-runner.mjs",
+      "?? validation/gate-03/gate-03-verifier.mjs",
+      "?? validation/gate-03/gate-03-verifier.test.mjs",
+      "?? validation/gate-03/multi-agent-handoff/multi-agent-handoff.test.mjs",
+      "?? validation/gate-03/traces/"
+    ]
+  },
+  "git_mutation_occurred": true,
+  "requires_mutations": true,
+  "safety_violation": false,
+  "produced_artifacts": [
+    {
+      "path": "_bmad-output/reviews/pr-review.md",
+      "digest": "805c6d5fe1ec3ef0c43a0d55823337ef8d9c9064dcf2e421d1a2c2956cc64a6a",
+      "size": 325
+    }
+  ],
+  "delivery_status": "PASS",
+  "timestamp": "2026-10-27T21:39:12.851Z"
+}

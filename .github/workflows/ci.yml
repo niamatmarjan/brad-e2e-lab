@@ -1,17 +1,43 @@
 name: Lab CI
 on:
   pull_request:
-    branches: [main]
   push:
-    branches: [main]
+    branches: [main, audit/gate-02-enterprise-acceptance, 'audit/**', 'test/**']
 permissions:
   contents: read
 jobs:
   test:
+    name: Node ${{ matrix.node }} Test & Bundle Verification
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - run: node --test
+          node-version: ${{ matrix.node }}
+      - name: Configure Git Identity for Test Execution
+        run: |
+          git config --global user.name "CI Runner"
+          git config --global user.email "ci-runner@example.com"
+      - name: Run Lab & Resilience Test Suite
+        run: node --test
+      - name: Verify apex-ledger.bundle SHA-256 Digest Manifest
+        run: |
+          sha256sum -c validation/enterprise-lifecycle/apex-ledger.bundle.sha256
+      - name: Verify apex-ledger.bundle Integrity & Complete History
+        run: |
+          git bundle verify validation/enterprise-lifecycle/apex-ledger.bundle
+      - name: Restore and Execute apex-ledger Tests from Bundle
+        run: |
+          git clone validation/enterprise-lifecycle/apex-ledger.bundle /tmp/apex-ledger-restored
+          cd /tmp/apex-ledger-restored
+          git log --graph --oneline --all
+          RESTORED_SHA=$(git rev-parse HEAD)
+          echo "Restored Commit SHA: $RESTORED_SHA"
+          test "$RESTORED_SHA" = "aa5dca558fac8f3601640aefd4fdc1fb2be90903"
+          npm test

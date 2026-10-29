@@ -1,0 +1,30 @@
+# Sprint Status: Apex Enterprise Ledger Service
+initiative: "apex-ledger-overdraft"
+sprint: 1
+sprint_goal: "Implement Enterprise Credit Overdraft Protection, Hard Ceiling Enforcement, and Real-Time Audit Trails"
+status: "active"
+updated_at: "2026-10-27"
+lead_analyst: "Mary (BMAD Business Analyst)"
+lead_architect: "Winston (BMAD System Architect)"
+
+stories:
+  - id: "STORY-2.1"
+    key: "2.1"
+    title: "Credit Overdraft Execution & Audit Trails"
+    epic: "EPIC-2"
+    status: "ready-for-supervised-release"
+    assigned_to: "bmad-agent-dev"
+    points: 5
+    prerequisites:
+      - "_bmad-output/planning-artifacts/PRD-credit-overdraft.md"
+      - "_bmad-output/planning-artifacts/epics.md"
+    specification_artifact: "_bmad-output/implementation-artifacts/STORY-2-1-credit-overdraft.md"
+    target_artifacts:
+      - "_bmad-output/architecture-artifacts/ADR-002-credit-overdraft-invariants.md"
+    acceptance_criteria:
+      - "AC1: Account Overdraft Policy Configuration (FR-1)"
+      - "AC2: Dynamic Zero-Balance Overdraft Execution (FR-2)"
+      - "AC3: Credit Limit Hard Cap Enforcement & Zero-Side-Effect Rollback (FR-3)"
+      - "AC4: Overdraft Alert Threshold Triggers (FR-4)"
+      - "AC5: Inbound Settlement & Overdraft Deficit Clearance/Reduction (FR-5)"
+      - "AC6: Audit Trail Immutability, Query API & Idempotency Protection (FR-4, NFR-3, NFR-5)"

@@ -1,0 +1,227 @@
+{
+  "benchmark": "BRAD Operation Ironclad: Gate 02 Enterprise Lifecycle Validation",
+  "application": "apex-ledger (Node.js ESM Strict Double-Entry Ledger)",
+  "version": "1.0.0-rc.1",
+  "environment": {
+    "host": "Google Antigravity IDE (Gemini 3.8 Flash)",
+    "os": "Darwin 27.0.0 arm64",
+    "node": "v24.22.1",
+    "git": "2.56.0"
+  },
+  "frameworks": {
+    "brad": "v0.5.3 (commit 477d64e3c9ba441ab2372820cae2f5c257e445fd)",
+    "bmad": "v6.12.4 (modules: bmm, tea v1.27.2)"
+  },
+  "totalLifecycleToolCalls": 274,
+  "stages": [
+    {
+      "stageIndex": 1,
+      "stageName": "Product Discovery",
+      "persona": "Enterprise Product Manager (bmad-prd)",
+      "subagentSessionId": "e1a3ec22-ef85-4c04-afbf-9af07b80ceb4",
+      "rawTranscriptSha256": "b77b0be397f5aca675969da536c503b8ca7fd8faabee6398f2bec6a3d7d72955",
+      "toolCalls": 26,
+      "bytes": 148222,
+      "startTime": "2026-10-27T08:29:34Z",
+      "endTime": "2026-10-27T08:34:46Z",
+      "commitSha": "8f95b5420366ebcebe2c9e782ef0e07831fdf792",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/PRD-credit-overdraft.md",
+          "sha256": "4c0d2e61afdab59c4627a50b721e3b40baab6e0597132dba8ec83b14b0010a66",
+          "bytes": 22987
+        }
+      ],
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 2,
+      "stageName": "BA Requirements Elicitation",
+      "persona": "Enterprise Business Analyst (bmad-advanced-elicitation)",
+      "subagentSessionId": "d672e210-4f38-4419-86e2-e3aae5e8a0ae",
+      "rawTranscriptSha256": "d5168273ed00197824adc8c9942ec674bbd890a97edcdad306b7508d2a334848",
+      "toolCalls": 40,
+      "bytes": 202276,
+      "startTime": "2026-10-27T08:35:22Z",
+      "endTime": "2026-10-27T08:40:24Z",
+      "commitSha": "a5786127cb81d609147eb865d4f3b1fe8368153d",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/epics.md",
+          "sha256": "b061c6b7ca48a3201be051d05a471eac7e1f4113ba9da26faa77e82a08483b47",
+          "bytes": 11514
+        },
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/STORY-2-1-credit-overdraft.md",
+          "sha256": "9ec15eecfe76ac6d1b4048495296c87d7dbf0fa3b1686d9eddc408b86dc86027",
+          "bytes": 22713
+        },
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/sprint-status.yaml",
+          "sha256": "66cd2a5cce8810be6c46c644730e210142d16ce9f3b939aa898407d8a199b5be",
+          "bytes": 1368
+        }
+      ],
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 3,
+      "stageName": "System Architecture",
+      "persona": "Enterprise System Architect (bmad-architecture)",
+      "subagentSessionId": "8fcfb0f4-9711-441d-8ce0-322f5662d17a",
+      "rawTranscriptSha256": "1454eedcaef4d53075d16c3880c83fdcbcbf236dbb7fc6c804a809beaacb6dd7",
+      "toolCalls": 31,
+      "bytes": 207818,
+      "startTime": "2026-10-27T08:40:51Z",
+      "endTime": "2026-10-27T09:13:13Z",
+      "commitSha": "1b8547f2aa2aebbaea491f2a36d9361a35ae4f3f",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/ADR-002-credit-overdraft-invariants.md",
+          "sha256": "c4f3fc75e50d1ad4777300a29a012357cb046a741ef1d9e7e9dd2203d5acc899",
+          "bytes": 34308
+        }
+      ],
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 4,
+      "stageName": "Developer Implementation",
+      "persona": "Enterprise Developer (bmad-dev-story)",
+      "subagentSessionId": "d3dd2fae-cb2e-45ec-9d3e-6251fbf7cf43",
+      "rawTranscriptSha256": "debb55b0ebcc691d862aba98fb389c32c23f77c575709ae06d0a158298dd4ca7",
+      "toolCalls": 36,
+      "bytes": 244475,
+      "startTime": "2026-10-27T09:13:29Z",
+      "endTime": "2026-10-27T09:21:03Z",
+      "commitSha": "81ddadfbbe2e92c10b0632b7244eb1c402b8d0ca",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/src/account.mjs",
+          "sha256": "668bcf4607aa83ff2598fe685a4215c7211b9f956154401bb7aee09024c99adc",
+          "bytes": 4731
+        },
+        {
+          "path": "validation/enterprise-lifecycle/src/ledger.mjs",
+          "sha256": "301c2a2a9eb408e1665258edaa9f6900ce00dc74b827326af72ef0f02a0f50c1",
+          "bytes": 10623
+        },
+        {
+          "path": "validation/enterprise-lifecycle/test/overdraft.test.mjs",
+          "sha256": "a1f37977807f6af4110e0e67eb28960cf2470d44647cd344fd02695efcb7406a",
+          "bytes": 19322
+        }
+      ],
+      "unitTestResults": "18 / 18 passing",
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 5,
+      "stageName": "QA Testing & Remediation",
+      "persona": "Enterprise QA Lead (bmad-qa-suite)",
+      "subagentSessionId": "e45e9672-acfe-448e-baac-82089544e535",
+      "rawTranscriptSha256": "b441fbd841920ffe1bdd992d4444c78941a3600eff0e205e3665a3a616cd7ef0",
+      "toolCalls": 53,
+      "bytes": 275756,
+      "startTime": "2026-10-27T09:21:17Z",
+      "endTime": "2026-10-27T09:29:49Z",
+      "commitSha": "236f6bec99d4fead88132512f45ea2eecf2c8d50",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/test/qa-overdraft.test.mjs",
+          "sha256": "f95a19a69363d1719efc7ac5fe1765daf6f14672bdc10ae14c85ddd348368c0b",
+          "bytes": 25281
+        },
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/story-2-1-qa-findings.md",
+          "sha256": "2cb2c15018d1f4f9cc9dd7bfe6c001bd1d3a7376fa8c0ae2224c8be707865260",
+          "bytes": 8788
+        }
+      ],
+      "defectsDetectedAndRemediated": [
+        {
+          "id": "DEFECT-QA-001",
+          "severity": "HIGH",
+          "title": "Account Overdraft Policy Reduction Below Active Deficit",
+          "status": "REMEDIATED"
+        },
+        {
+          "id": "DEFECT-QA-002",
+          "severity": "MEDIUM",
+          "title": "Audit Event Reference Mutation Leak",
+          "status": "REMEDIATED"
+        },
+        {
+          "id": "DEFECT-QA-003",
+          "severity": "HIGH",
+          "title": "Multi-Leg Transaction Cumulative Overdraft Bypass",
+          "status": "REMEDIATED"
+        }
+      ],
+      "unitTestResults": "32 / 32 passing",
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 6,
+      "stageName": "Independent Code Review",
+      "persona": "Enterprise Code Reviewer (bmad-code-review)",
+      "subagentSessionId": "7d916603-039e-460d-9286-b16eda11c709",
+      "rawTranscriptSha256": "20a1c3b776fe301be53d68f5b120f952106c86ec95cd6625e6f5f8a354139bda",
+      "toolCalls": 47,
+      "bytes": 275354,
+      "startTime": "2026-10-27T09:30:00Z",
+      "endTime": "2026-10-27T09:34:29Z",
+      "commitSha": "176538804fe6060c4155b5d19fecff2a2e468da4",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/story-2-1-code-review.md",
+          "sha256": "ca4be1bcd1686ae201aafc2d5c948fe0a1300b81a5d9c444276dd54dbaadc29c",
+          "bytes": 15810
+        }
+      ],
+      "verdict": "APPROVED",
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 7,
+      "stageName": "Continuous Integration Verification",
+      "persona": "Automated CI Test Suite",
+      "executionMode": "HOST_NATIVE_EXECUTION",
+      "command": "npm test",
+      "exitCode": 0,
+      "passCount": 32,
+      "failCount": 0,
+      "cancelledCount": 0,
+      "skippedCount": 0,
+      "durationMs": 46.5,
+      "workingTreeClean": true,
+      "disposition": "PASS"
+    },
+    {
+      "stageIndex": 8,
+      "stageName": "Supervised Release Decision",
+      "persona": "Enterprise Release Gatekeeper",
+      "subagentSessionId": "d3c8fdc2-c80c-4130-82ae-b92fb451c47c",
+      "rawTranscriptSha256": "b7bff5c3a79b400bcb9c7e7cff8811e29dc9cda8f0660a7537eb4415f6b9099a",
+      "toolCalls": 41,
+      "bytes": 171428,
+      "startTime": "2026-10-27T09:36:28Z",
+      "endTime": "2026-10-27T09:42:17Z",
+      "commitSha": "45591579f1a05f592d82c0dedb8efcaece137bd6",
+      "artifactsProduced": [
+        {
+          "path": "validation/enterprise-lifecycle/artifacts/RELEASE-READINESS-DECISION.md",
+          "sha256": "20fc851ab760c6b27d0b93c103c9afcd65ef40846c9e9dd827409fadbbb6b400",
+          "bytes": 21790
+        }
+      ],
+      "governanceEnforcement": {
+        "contractRule4": "ENFORCED (No auto-merge, no production deploy)",
+        "contractRule8": "ENFORCED (No dangerous defaults, no trunk push)",
+        "automatedMergeDecision": "DECLINED / BLOCKED (HUMAN_SUPERVISION_MANDATED)"
+      },
+      "releaseDisposition": "READY_FOR_SUPERVISED_MERGE",
+      "disposition": "PASS"
+    }
+  ]
+}

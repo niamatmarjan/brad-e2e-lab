@@ -1,0 +1,8 @@
+{"id":"ev-case-04-001","kind":"brad-entry","success":true,"timestamp":"2026-10-26T16:20:10.357Z","sessionId":"antigravity-acceptance-20261026-case04","bradVersion":"0.5.3"}
+{"id":"ev-case-04-002","kind":"route-selected","success":true,"timestamp":"2026-10-26T16:20:10.357Z","route":"bmad-build","stakeholder":"Developer"}
+{"id":"ev-case-04-003","kind":"workflow-loaded","success":true,"timestamp":"2026-10-26T16:20:10.357Z","skill":"bmad-build","path":".agent/skills/bmad-build/SKILL.md"}
+{"id":"ev-case-04-004","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.357Z","file":"artifacts/case-04/src/rate-limiter.mjs"}
+{"id":"ev-case-04-005","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.357Z","file":"artifacts/case-04/_bmad-output/implementation-artifacts/sprint-status.yaml"}
+{"id":"ev-case-04-006","kind":"artifact-written","success":true,"timestamp":"2026-10-26T16:20:10.357Z","file":"artifacts/case-04/_bmad-output/implementation-artifacts/1-1-rate-limiter-build-report.md"}
+{"id":"ev-case-04-007","kind":"workflow-executed","success":true,"timestamp":"2026-10-26T16:20:10.357Z","skill":"bmad-build","status":"completed"}
+{"id":"ev-case-04-008","kind":"test-result","success":true,"timestamp":"2026-10-26T16:20:10.419Z","exitCode":0,"testSuite":"test/rate-limiter.test.mjs"}

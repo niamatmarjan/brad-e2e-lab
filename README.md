@@ -1,30 +1,28 @@
-# BRAD E2E Lab
+# BRAD E2E Lab — Production Readiness Validation
 
-Disposable, **public** project used to verify a genuine BRAD → native BMAD → implementation → independent review → GitHub PR → CI workflow.
+This public, **disposable** repository is BRAD's independent integration and evidence-validation laboratory. The objective is a defensible route from the released supervised-preview BRAD v0.5.3 baseline to a future production release. This repository does **not** deploy services, host credentials, or certify BRAD by itself.
 
-**No customer data, API keys, private logs, privileged resources, or production deployments.** Never merge a pilot PR automatically.
+## Existing real pilot history (preserved)
 
-## Baseline
-- Node.js 20+ (zero external npm dependencies).
-- Story 1.1 was implemented and merged after 18 GitHub CI tests passed. **Story 1.2 has not been implemented**; it is a controlled new-session resume validation fixture, not a production feature.
-- Story 1.1 is [completed](_bmad-output/implementation-artifacts/1-1-rate-limiter.md). Story 1.2 is [approved for the resume experiment](_bmad-output/implementation-artifacts/1-2-rate-limiter-peek.md). Scope must remain within these fictional fixtures.
-- The project does **not** bundle BRAD or BMAD skills. The coding host must install them in the actual workspace, verify the skill catalog, and use the released BRAD **v0.5.1** for the completed Story 1.1 pilot. The v0.5.1 release is still the pinned baseline; using a newer `#main` BRAD source must be disclosed, and it is not a new tagged release.
+- Story 1.1: implementation and PR #2 merged after real CI.
+- Story 1.2: controlled, two-conversation resume via PR #4, merged. This is **not** an actual process-crash test.
+- Story 1.3: PR #5 remains open/unmerged; preserve its branch and review history.
 
-## Completed Story 1.1 pilot
-1. Clone this repository and open **this root** in a fresh coding-host window.
-2. Install BRAD v0.5.1 in this workspace using the [official BRAD release](https://github.com/niamatmarjan/brad/releases/tag/v0.5.1):
-   `npx --yes "github:niamatmarjan/brad#v0.5.1" setup --agent antigravity`
-3. If official BMAD v6 is missing, obtain approval before installing it through `npx bmad-method install`. Use official installer prompts and configure BMM and code review, optionally TEA. Restart the coding host as needed.
-4. Verify **actual host-registered native skills** and the exact Story 1.1 identifier before writes.
-5. With specific authorization to push and create PRs **only in this lab**, request `/brad 1.1 --pr` (or your host's supported BRAD invocation). Do not merge.
-6. Record authentic route/installation/native execution modes, the implementation diff, tests, separate reviewer evidence where supported, real GitHub PR, and actual CI check results.
+Historical step-by-step protocols remain in [PILOT.md](PILOT.md) and [RESUME_PILOT.md](RESUME_PILOT.md), including their original version pins; those are historical, not current onboarding instructions.
 
-See [PILOT.md](PILOT.md) for the historical Story 1.1 protocol, and [RESUME_PILOT.md](RESUME_PILOT.md) for the **new** controlled Story 1.2 interruption/resume experiment.
+## Active testing track
 
-## Local baseline test
+- [Independent evidence intake](validation/README.md): what can and cannot be inferred from transcripts.
+- [Production release gates](validation/RELEASE_GATES.md): measurable acceptance criteria.
+- [Ironclad audit findings](validation/IRONCLAD_FINDINGS.md): evidence integrity issues and remediation.
+- [Antigravity execution runbook](validation/ANTIGRAVITY_RUNBOOK.md): bounded live host acceptance runs.
+- [Evidence checker](validation/verify-evidence.mjs): fail-closed **structural checks**. It explicitly returns NOT_CERTIFIED even for valid synthetic records.
 
-```sh
+```bash
 node --test
+node validation/verify-evidence.mjs path/to/sanitized-run.json
 ```
 
-The test suite includes Story 1.1. Green `main` is the baseline before Story 1.2 begins; passing it does **not** establish resumption reliability.
+All real host execution must use pinned BRAD/BMAD refs, unique isolated disposable fixtures, and a scorer whose frozen oracle was not shared with the coordinator. **Never publish raw host transcripts, ~/.gemini files, credentials, private source, personally identifying details, or environment dumps.** Store raw evidence privately; public sanitized evidence requires manual privacy review and reproducible provenance. No automatic merge, release, deployment, or certification claims.
+
+The BRAD product repository remains [niamatmarjan/brad](https://github.com/niamatmarjan/brad). Its draft Ironclad PR #38 stays separate from this lab and is **not** accepted merely because CI passes.
