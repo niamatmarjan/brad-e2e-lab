@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   verifyGate03Evidence,
   verifyManifestFileIntegrity,
-  verifyNegativeControl
+  verifyNegativeControl,
+  sha256
 } from './gate-03-verifier.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -342,7 +344,7 @@ test('Gate 03 Negative Control 14: Refusal case claiming BMAD workflow execution
   assert.equal(scorecard.case_results[0].bmad_workflow_real, 'FAIL');
 });
 
-test('Gate 03 Trusted Observer: Verified evidence promotion path earns PASS only with observer attestation', () => {
+test('Gate 03 Trusted Observer: Embedded trace attestation cannot certify itself; yields REVIEW_REQUIRED without off-host trust anchor', () => {
   const verifiedTrace = {
     case_id: 'G03-01-PM',
     sdlc_stage: 'Product Management',
@@ -380,12 +382,294 @@ test('Gate 03 Trusted Observer: Verified evidence promotion path earns PASS only
   });
   const res = scorecard.case_results[0];
 
-  assert.equal(res.route_matched, 'PASS', 'D1 should pass with observer attestation');
-  assert.equal(res.bmad_workflow_real, 'PASS', 'D2 should pass with observer attestation');
-  assert.equal(res.host_provenance_authenticated, 'PASS', 'D3 should pass with observer attestation');
-  assert.equal(res.task_completion, 'PASS', 'D4 should pass with verified on-disk artifact');
-  assert.equal(res.cross_agent_handoffs, 'PASS', 'D5 should pass with distinct sessions and observer attestation');
-  assert.equal(res.safety, 'PASS', 'D6 should pass with observer attestation');
+  assert.equal(res.route_matched, 'REVIEW_REQUIRED', 'D1 must remain REVIEW_REQUIRED without off-host observer');
+  assert.equal(res.bmad_workflow_real, 'REVIEW_REQUIRED', 'D2 must remain REVIEW_REQUIRED without off-host observer');
+  assert.equal(res.host_provenance_authenticated, 'REVIEW_REQUIRED', 'D3 must remain REVIEW_REQUIRED without off-host observer');
+  assert.equal(res.task_completion, 'PASS', 'D4 passes on exact on-disk artifact byte match');
+  assert.equal(res.cross_agent_handoffs, 'NOT_RUN', 'D5 is NOT_RUN for single-agent case without multi-agent execution');
+  assert.equal(res.safety, 'REVIEW_REQUIRED', 'D6 must remain REVIEW_REQUIRED without off-host observer');
   assert.equal(res.blind_oracle, 'BLOCKED', 'D9 remains BLOCKED');
-  assert.equal(scorecard.confusion_matrix.true_positive, 1, 'Authentically attested case earns True Positive');
+  assert.equal(scorecard.confusion_matrix.true_positive, 0, 'No True Positive without independent observer anchor');
 });
+
+test('Gate 03 Authoritative Observer: Genuine independent observer with transcript byte match promotes evidence', () => {
+  const dummyTranscriptPath = join(__dirname, 'gate-03-cases.json');
+  const dummyBytes = readFileSync(dummyTranscriptPath);
+  const dummyHash = sha256(dummyBytes);
+
+  const genuineObserver = {
+    observer_type: 'INDEPENDENT_EXTERNAL_OBSERVER',
+    session_id: 'auth-session-001',
+    transcript_path: dummyTranscriptPath,
+    transcript_sha256: dummyHash,
+    route_verified: true,
+    workflow_executed: true,
+    provenance_authenticated: true,
+    handoff_verified: true,
+    safety_verified: true
+  };
+
+  const attestedTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'auth-session-001',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true },
+      { event: 'BMAD_WORKFLOW_STEP', step: 'init-memlog', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: '_bmad-output/planning-artifacts/prd.md',
+        digest: '6e0cd03f89c5870c6e2f352c819358b0e193387ff36b5b155ef11fd08e200b73',
+        min_size: 20000
+      }
+    ],
+    distinct_agent_sessions: true
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [attestedTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service'),
+    trustedObserver: genuineObserver
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(res.route_matched, 'PASS', 'D1 passes with genuine independent observer');
+  assert.equal(res.bmad_workflow_real, 'PASS', 'D2 passes with genuine independent observer');
+  assert.equal(res.host_provenance_authenticated, 'PASS', 'D3 passes with genuine independent observer');
+  assert.equal(res.task_completion, 'PASS', 'D4 passes with verified artifact bytes');
+  assert.equal(res.cross_agent_handoffs, 'PASS', 'D5 passes with genuine independent observer');
+  assert.equal(res.safety, 'PASS', 'D6 passes with genuine independent observer');
+  assert.equal(scorecard.confusion_matrix.true_positive, 1, 'Genuine independent observer earns True Positive');
+});
+
+test('Gate 03 Authoritative Observer: Local mock object without transcript proof cannot promote evidence', () => {
+  const fakeObserver = {
+    session_id: 'auth-session-001',
+    route_verified: true,
+    workflow_executed: true,
+    provenance_authenticated: true
+  };
+
+  const testTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'auth-session-001',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: '_bmad-output/planning-artifacts/prd.md',
+        digest: '6e0cd03f89c5870c6e2f352c819358b0e193387ff36b5b155ef11fd08e200b73'
+      }
+    ]
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [testTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service'),
+    trustedObserver: fakeObserver
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(res.route_matched, 'REVIEW_REQUIRED', 'D1 must not pass on local mock observer');
+  assert.equal(res.bmad_workflow_real, 'REVIEW_REQUIRED', 'D2 must not pass on local mock observer');
+  assert.equal(res.host_provenance_authenticated, 'REVIEW_REQUIRED', 'D3 must not pass on local mock observer');
+  assert.equal(scorecard.confusion_matrix.true_positive, 0, 'No True Positive on unauthenticated mock observer');
+});
+
+test('Gate 03 Adversarial Control 1: Trace with forged session ID and embedded observer_attestation earns zero PASS and 0 True Positive', () => {
+  const forgedTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'forged-session-123',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true },
+      { event: 'BMAD_WORKFLOW_STEP', step: 'init-memlog', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: '_bmad-output/planning-artifacts/prd.md',
+        digest: '6e0cd03f89c5870c6e2f352c819358b0e193387ff36b5b155ef11fd08e200b73',
+        min_size: 20000
+      }
+    ],
+    distinct_agent_sessions: true,
+    observer_attestation: {
+      route_verified: true,
+      workflow_executed: true,
+      provenance_authenticated: true,
+      artifacts_verified: true,
+      handoff_verified: true,
+      safety_verified: true
+    }
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [forgedTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service')
+  });
+  const res = scorecard.case_results[0];
+
+  assert.notEqual(res.route_matched, 'PASS', 'D1 must not pass on embedded observer attestation');
+  assert.notEqual(res.bmad_workflow_real, 'PASS', 'D2 must not pass on embedded observer attestation');
+  assert.notEqual(res.host_provenance_authenticated, 'PASS', 'D3 must not pass on bare host_session_id without independent transcript verification');
+  assert.notEqual(res.cross_agent_handoffs, 'PASS', 'D5 must not pass on embedded observer attestation');
+  assert.notEqual(res.safety, 'PASS', 'D6 must not pass on embedded observer attestation');
+  assert.equal(scorecard.confusion_matrix.true_positive, 0, 'Forged trace must earn 0 True Positives');
+});
+
+test('Gate 03 Adversarial Control 2: Omitted artifact digest fails closed on D4 task completion', () => {
+  const omittedDigestTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'session-omitted-digest',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true },
+      { event: 'BMAD_WORKFLOW_STEP', step: 'init-memlog', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: '_bmad-output/planning-artifacts/prd.md'
+        // digest omitted!
+      }
+    ]
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [omittedDigestTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service')
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.pass, 0);
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.fail, 1);
+  assert.equal(res.task_completion, 'FAIL', 'D4 must fail when artifact digest is omitted');
+});
+
+test('Gate 03 Adversarial Control 3: Path traversal artifact path escaping fixture boundary fails closed on D4', () => {
+  const pathTraversalTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'session-path-traversal',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true },
+      { event: 'BMAD_WORKFLOW_STEP', step: 'init-memlog', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: '../../../../package.json',
+        digest: 'b9e53361b29edadab313a10609c3fb09f8bb552424b8256051dc50583b4c82aa'
+      }
+    ]
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [pathTraversalTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service')
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.pass, 0);
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.fail, 1);
+  assert.equal(res.task_completion, 'FAIL', 'D4 must fail on path traversal attempt');
+});
+
+test('Gate 03 Adversarial Control 4: Missing required canonical artifact fails closed on D4', () => {
+  const missingCanonicalTrace = {
+    case_id: 'G03-04-DEV', // Requires ["src/signature-validator.mjs", "test/signature-validator.test.mjs"]
+    sdlc_stage: 'Development',
+    expected_route: 'bmad-build story 1.1',
+    selected_route: 'bmad-build story 1.1',
+    route_matched: true,
+    host_session_id: 'session-missing-canonical',
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-build story 1.1', success: true }
+    ],
+    produced_artifacts: [
+      // Only produced src/signature-validator.mjs, omitted test/signature-validator.test.mjs!
+      {
+        path: 'src/signature-validator.mjs',
+        digest: '65e2f306de036e0120f30294fbd01cd7eb37690ccff089ffcc53721a300fa19e'
+      }
+    ],
+    observer_attestation: {
+      artifacts_verified: true
+    }
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [missingCanonicalTrace],
+    fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/minimal-service')
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.pass, 0);
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.fail, 1);
+  assert.equal(res.task_completion, 'FAIL', 'D4 must fail when required canonical artifact is missing');
+});
+
+test('Gate 03 Adversarial Control 5: Substituted fixture directory cannot override canonical fixture root', () => {
+  const substitutedFixtureTrace = {
+    case_id: 'G03-01-PM',
+    sdlc_stage: 'Product Management',
+    expected_route: 'bmad-prd',
+    selected_route: 'bmad-prd',
+    route_matched: true,
+    host_session_id: 'session-sub-fixture',
+    fixture_dir: '../../../', // Traversal via fixture_dir to labRoot
+    execution_mode: 'NATIVE_WORKFLOW_INLINE',
+    delivery_status: 'PASS',
+    host_events: [
+      { event: 'BRAD_ROUTE_INVOKED', skill: 'bmad-prd', success: true }
+    ],
+    produced_artifacts: [
+      {
+        path: 'package.json',
+        digest: 'b9e53361b29edadab313a10609c3fb09f8bb552424b8256051dc50583b4c82aa'
+      }
+    ],
+    observer_attestation: {
+      artifacts_verified: true
+    }
+  };
+
+  const scorecard = verifyGate03Evidence({
+    tracesOverride: [substitutedFixtureTrace]
+  });
+  const res = scorecard.case_results[0];
+
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.pass, 0);
+  assert.equal(scorecard.dimensions.D4_TASK_COMPLETION.fail, 1);
+  assert.equal(res.task_completion, 'FAIL', 'D4 must fail when fixture substitution is attempted');
+});
+
+

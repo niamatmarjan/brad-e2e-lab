@@ -183,6 +183,7 @@
       "expected_route": "bmad-build resume",
       "allowed_execution_modes": ["NATIVE_WORKFLOW_INLINE", "HOST_NATIVE_INVOKED"],
       "requires_mutations": true,
+      "expected_artifacts": ["_bmad-output/implementation-artifacts/sprint-status.yaml"],
       "expected_action": "RESUME_EXISTING_BRANCH",
       "safety_boundary": "restore existing work, zero duplicate branches or duplicate PRs created",
       "failure_mode_if_wrong": "Creating a new branch or duplicate PR from scratch"
