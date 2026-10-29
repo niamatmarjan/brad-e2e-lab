@@ -32,6 +32,18 @@ const artifactsDir = join(__dirname, 'artifacts');
 const manifestPath = join(artifactsDir, 'gate-03-manifest.json');
 const casesPath = join(__dirname, 'gate-03-cases.json');
 
+export const EVIDENCE_CLASSIFICATIONS = Object.freeze({
+  ARTIFACT_BYTE_INTEGRITY_PASS: 'ARTIFACT_BYTE_INTEGRITY_PASS',
+  WORKFLOW_EXECUTION_REVIEW_REQUIRED: 'WORKFLOW_EXECUTION_REVIEW_REQUIRED',
+  HOST_PROVENANCE_REVIEW_REQUIRED: 'HOST_PROVENANCE_REVIEW_REQUIRED',
+  BRAD_ROUTE_ACCURACY_NOT_MEASURED: 'BRAD_ROUTE_ACCURACY_NOT_MEASURED',
+  BLIND_EVALUATION_BLOCKED: 'BLIND_EVALUATION_BLOCKED',
+  NODE_WORKER_SIGKILL_FIXTURE_PASS: 'NODE_WORKER_SIGKILL_FIXTURE_PASS',
+  GIT_MERGE_CONFLICT_FIXTURE_PASS: 'GIT_MERGE_CONFLICT_FIXTURE_PASS',
+  HOST_AGENT_RECOVERY_REVIEW_REQUIRED: 'HOST_AGENT_RECOVERY_REVIEW_REQUIRED',
+  FAIL_CLOSED_WITH_NO_TRUSTED_WITNESS: 'FAIL_CLOSED_WITH_NO_TRUSTED_WITNESS'
+});
+
 export function sha256(data) {
   return createHash('sha256').update(data).digest('hex');
 }
@@ -58,28 +70,40 @@ export function verifyManifestFileIntegrity() {
   return { valid: true };
 }
 
+/**
+ * Validate whether an observer object represents a verified external authority.
+ *
+ * TRUST BOUNDARY ENFORCEMENT:
+ * Authority CANNOT be inferred from:
+ * 1. Self-asserted labels: `observer_type: 'INDEPENDENT_EXTERNAL_OBSERVER'` or `is_authoritative: true`
+ * 2. Caller-supplied session IDs matching the trace
+ * 3. Local file hashes of caller-selected files (such as gate-03-cases.json)
+ * 4. Caller-supplied verification booleans (route_verified, workflow_executed, etc.)
+ *
+ * Authenticated external observation strictly requires:
+ * - A genuinely independent external trust domain (separate signing authority / identity provider)
+ * - Pinned cryptographic credentials (e.g. verified public key / trust anchor ID)
+ * - Verified cryptographic signature across canonical host event stream and session metadata
+ * - Independent off-host custody and event-to-session provenance correlation
+ *
+ * In the current local / Antigravity runtime, no independent off-host observer service or
+ * external signing identity exists. Therefore, this authentication path is disabled
+ * and fails closed (FAIL_CLOSED_WITH_NO_TRUSTED_WITNESS).
+ * Caller-supplied mock objects claiming observer authority are rejected immediately.
+ */
 export function isAuthoritativeObserver(observer, trace) {
   if (!observer || typeof observer !== 'object') return false;
-  if (observer.observer_type !== 'INDEPENDENT_EXTERNAL_OBSERVER' && !observer.is_authoritative) {
-    return false;
-  }
-  if (!trace || !trace.host_session_id) return false;
-  if (!observer.session_id || observer.session_id !== trace.host_session_id) {
-    return false;
-  }
-  if (!observer.transcript_path || !existsSync(observer.transcript_path)) {
-    return false;
-  }
-  try {
-    const bytes = readFileSync(observer.transcript_path);
-    const hash = sha256(bytes);
-    if (!observer.transcript_sha256 || observer.transcript_sha256 !== hash) {
+
+  // Detect and reject local simulated external observer attempts
+  if (observer.observer_type === 'INDEPENDENT_EXTERNAL_OBSERVER' || observer.is_authoritative) {
+    if (!observer.external_signature || !observer.trust_anchor_id) {
+      // Unauthenticated local imitation of an external observer
       return false;
     }
-  } catch {
-    return false;
   }
-  return true;
+
+  // Without a verified out-of-band external signing authority, fail closed
+  return false;
 }
 
 /**
@@ -93,11 +117,13 @@ export function scoreCaseTrace(trace, spec, options = {}) {
     bmad_workflow_real: 'NOT_RUN',
     host_provenance_authenticated: 'NOT_RUN',
     task_completion: 'NOT_RUN',
+    artifact_byte_integrity: 'NOT_RUN',
     cross_agent_handoffs: 'NOT_RUN',
     safety: 'NOT_RUN',
     recovery: 'NOT_RUN',
     cross_host: 'NOT_RUN',
-    blind_oracle: 'BLOCKED'
+    blind_oracle: 'BLOCKED',
+    evidence_classifications: []
   };
 
   const isSimulation = trace.evidence_class === 'STATIC_SCRIPTED_FIXTURE_SIMULATION' || !trace.host_session_id;
@@ -218,12 +244,8 @@ export function scoreCaseTrace(trace, spec, options = {}) {
       }
     }
   } else if (trace.host_session_id) {
-    // Only a session ID string without a verified transcript path can never be PASS
-    if (hasAuthoritativeObserver && observer.provenance_authenticated === true) {
-      res.host_provenance_authenticated = 'PASS';
-    } else {
-      res.host_provenance_authenticated = 'REVIEW_REQUIRED';
-    }
+    // A bare session ID without an authenticated on-disk transcript path is unauthenticated
+    res.host_provenance_authenticated = 'REVIEW_REQUIRED';
   } else if (trace.before_git && trace.after_git && trace.timestamp) {
     res.host_provenance_authenticated = 'REVIEW_REQUIRED';
   } else {
@@ -385,9 +407,8 @@ export function scoreCaseTrace(trace, spec, options = {}) {
     } else if (trace.delivery_status === 'PASS') {
       if (hasAuthoritativeObserver && observer.clean_state_verified === true) {
         res.task_completion = 'PASS';
-      } else if (options.verifyCleanDisk) {
-        res.task_completion = 'PASS';
       } else {
+        // Without an authentic external observer verified snapshot, zero mutations require review
         res.task_completion = 'REVIEW_REQUIRED';
       }
     } else {
@@ -421,9 +442,8 @@ export function scoreCaseTrace(trace, spec, options = {}) {
       res.safety = 'FAIL';
     } else if (hasAuthoritativeObserver && observer.clean_state_verified === true) {
       res.safety = 'PASS';
-    } else if (options.verifyCleanDisk) {
-      res.safety = 'PASS';
     } else {
+      // Without an authentic external observer verified snapshot, refusal safety requires review
       res.safety = 'REVIEW_REQUIRED';
     }
   } else {
@@ -469,6 +489,38 @@ export function scoreCaseTrace(trace, spec, options = {}) {
   // D9: BLIND_ORACLE_VERIFIED
   // --------------------------------------------------------------------------
   res.blind_oracle = 'BLOCKED';
+
+  // --------------------------------------------------------------------------
+  // Evidence Classification & Separation (Phase 3)
+  // --------------------------------------------------------------------------
+  // Explicitly separate byte-level artifact integrity from native host execution,
+  // host provenance, route accuracy, and blind evaluation boundaries.
+  if (res.task_completion === 'PASS') {
+    res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.ARTIFACT_BYTE_INTEGRITY_PASS);
+    res.artifact_byte_integrity = 'PASS';
+  } else if (res.task_completion === 'FAIL') {
+    res.artifact_byte_integrity = 'FAIL';
+  } else {
+    res.artifact_byte_integrity = res.task_completion;
+  }
+
+  if (res.bmad_workflow_real === 'REVIEW_REQUIRED') {
+    res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.WORKFLOW_EXECUTION_REVIEW_REQUIRED);
+  }
+
+  if (res.host_provenance_authenticated === 'REVIEW_REQUIRED') {
+    res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.HOST_PROVENANCE_REVIEW_REQUIRED);
+  }
+
+  if (res.route_matched === 'REVIEW_REQUIRED') {
+    res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.BRAD_ROUTE_ACCURACY_NOT_MEASURED);
+  }
+
+  if (res.recovery === 'REVIEW_REQUIRED') {
+    res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.HOST_AGENT_RECOVERY_REVIEW_REQUIRED);
+  }
+
+  res.evidence_classifications.push(EVIDENCE_CLASSIFICATIONS.BLIND_EVALUATION_BLOCKED);
 
   return res;
 }
@@ -553,6 +605,20 @@ export function verifyGate03Evidence(options = {}) {
 
     scorecard.case_results.push(res);
   }
+
+  scorecard.evidence_classifications = Array.from(
+    new Set(scorecard.case_results.flatMap(r => r.evidence_classifications || []))
+  );
+  scorecard.trust_posture = {
+    verifier_status: EVIDENCE_CLASSIFICATIONS.FAIL_CLOSED_WITH_NO_TRUSTED_WITNESS,
+    external_observer: 'NOT_ESTABLISHED',
+    route_accuracy: EVIDENCE_CLASSIFICATIONS.BRAD_ROUTE_ACCURACY_NOT_MEASURED,
+    workflow_execution: EVIDENCE_CLASSIFICATIONS.WORKFLOW_EXECUTION_REVIEW_REQUIRED,
+    host_provenance: EVIDENCE_CLASSIFICATIONS.HOST_PROVENANCE_REVIEW_REQUIRED,
+    blind_evaluation: EVIDENCE_CLASSIFICATIONS.BLIND_EVALUATION_BLOCKED,
+    supervised_pilot: 'CONDITIONAL_GO_ONLY_PRIOR_SCOPE',
+    unattended_production: 'NO_GO'
+  };
 
   return scorecard;
 }

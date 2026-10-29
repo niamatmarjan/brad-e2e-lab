@@ -7,7 +7,8 @@ import {
   verifyGate03Evidence,
   verifyManifestFileIntegrity,
   verifyNegativeControl,
-  sha256
+  sha256,
+  EVIDENCE_CLASSIFICATIONS
 } from './gate-03-verifier.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -392,13 +393,16 @@ test('Gate 03 Trusted Observer: Embedded trace attestation cannot certify itself
   assert.equal(scorecard.confusion_matrix.true_positive, 0, 'No True Positive without independent observer anchor');
 });
 
-test('Gate 03 Authoritative Observer: Genuine independent observer with transcript byte match promotes evidence', () => {
+test('Gate 03 Adversarial Control 6: Invented observer with gate-03-cases.json dummy transcript earns zero authenticated PASS and 0 True Positive (LOCAL_MOCK_OBSERVER_NOT_AUTHENTICATED)', () => {
   const dummyTranscriptPath = join(__dirname, 'gate-03-cases.json');
   const dummyBytes = readFileSync(dummyTranscriptPath);
   const dummyHash = sha256(dummyBytes);
 
-  const genuineObserver = {
+  // Adversarial mock: caller-constructed object attempting to self-certify
+  // external observer authority using an ordinary JSON file (gate-03-cases.json)
+  const localMockObserver = {
     observer_type: 'INDEPENDENT_EXTERNAL_OBSERVER',
+    is_authoritative: true,
     session_id: 'auth-session-001',
     transcript_path: dummyTranscriptPath,
     transcript_sha256: dummyHash,
@@ -435,17 +439,29 @@ test('Gate 03 Authoritative Observer: Genuine independent observer with transcri
   const scorecard = verifyGate03Evidence({
     tracesOverride: [attestedTrace],
     fixtureRoot: join(labRoot, 'validation/gate-03/fixtures/live-smoke-service'),
-    trustedObserver: genuineObserver
+    trustedObserver: localMockObserver
   });
   const res = scorecard.case_results[0];
 
-  assert.equal(res.route_matched, 'PASS', 'D1 passes with genuine independent observer');
-  assert.equal(res.bmad_workflow_real, 'PASS', 'D2 passes with genuine independent observer');
-  assert.equal(res.host_provenance_authenticated, 'PASS', 'D3 passes with genuine independent observer');
-  assert.equal(res.task_completion, 'PASS', 'D4 passes with verified artifact bytes');
-  assert.equal(res.cross_agent_handoffs, 'PASS', 'D5 passes with genuine independent observer');
-  assert.equal(res.safety, 'PASS', 'D6 passes with genuine independent observer');
-  assert.equal(scorecard.confusion_matrix.true_positive, 1, 'Genuine independent observer earns True Positive');
+  // Fail-closed verification: invented observer with gate-03-cases.json must NOT earn authenticated PASS
+  assert.equal(res.route_matched, 'REVIEW_REQUIRED', 'D1 must remain REVIEW_REQUIRED without external signing authority');
+  assert.equal(res.bmad_workflow_real, 'REVIEW_REQUIRED', 'D2 must remain REVIEW_REQUIRED without external signing authority');
+  assert.equal(res.host_provenance_authenticated, 'REVIEW_REQUIRED', 'D3 must remain REVIEW_REQUIRED; gate-03-cases.json is not an authenticated host transcript');
+  assert.equal(res.task_completion, 'PASS', 'D4 passes on exact artifact byte integrity in fixture');
+  assert.notEqual(res.cross_agent_handoffs, 'PASS', 'D5 cannot pass without authenticated external observer');
+  assert.equal(res.safety, 'REVIEW_REQUIRED', 'D6 must remain REVIEW_REQUIRED without external signing authority');
+  assert.equal(res.blind_oracle, 'BLOCKED', 'D9 remains BLOCKED');
+
+  // Explicit evidence classification check (Phase 3)
+  assert.ok(res.evidence_classifications.includes(EVIDENCE_CLASSIFICATIONS.ARTIFACT_BYTE_INTEGRITY_PASS), 'Artifact byte integrity is explicitly separated');
+  assert.ok(res.evidence_classifications.includes(EVIDENCE_CLASSIFICATIONS.WORKFLOW_EXECUTION_REVIEW_REQUIRED), 'Workflow execution requires external review');
+  assert.ok(res.evidence_classifications.includes(EVIDENCE_CLASSIFICATIONS.HOST_PROVENANCE_REVIEW_REQUIRED), 'Host provenance requires external review');
+  assert.ok(res.evidence_classifications.includes(EVIDENCE_CLASSIFICATIONS.BRAD_ROUTE_ACCURACY_NOT_MEASURED), 'Route accuracy is not measured without independent cohort');
+  assert.ok(res.evidence_classifications.includes(EVIDENCE_CLASSIFICATIONS.BLIND_EVALUATION_BLOCKED), 'Blind evaluation is blocked');
+
+  // Zero True Positives on local mock observer
+  assert.equal(scorecard.confusion_matrix.true_positive, 0, 'Invented observer with gate-03-cases.json must earn ZERO True Positives');
+  assert.equal(scorecard.confusion_matrix.unverified, 1, 'Unauthenticated execution remains unverified in confusion matrix');
 });
 
 test('Gate 03 Authoritative Observer: Local mock object without transcript proof cannot promote evidence', () => {

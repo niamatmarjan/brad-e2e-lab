@@ -9,7 +9,7 @@
 - BRAD Core: `https://github.com/niamatmarjan/brad` (`v0.5.3`)
 - Baseline Commit: `5d293e62c585d3505082e211c623edcab0d418ff` (Lab PR #11)
 - Historical Rejected Commit: `338aed461ac644f4eed351d478214686770f30aa`
-- Tracking Issues: Lab Issue #19 (P1 Observer Trust Boundary Bypass Remediation), Lab Issue #18 (Gate 03 Verifier Forgery Audit), Lab Issue #16 (P0 Audit), Lab Issue #15 (Gate 03 Tracking), BRAD Issue #39 (Readiness)
+- Tracking Issues: Lab Issue #20 (P1 Gate 03 Observer Trust Anchor Bypass Remediation), Lab Issue #19 (P1 Observer Trust Boundary Bypass Remediation), Lab Issue #18 (Gate 03 Verifier Forgery Audit), Lab Issue #16 (P0 Audit), Lab Issue #15 (Gate 03 Tracking), BRAD Issue #39 (Readiness)
 
 ---
 
@@ -76,30 +76,39 @@ The verifier (`validation/gate-03/gate-03-verifier.mjs`) has been re-architected
 - `NOT_RUN`: Execution did not take place.
 - `BLOCKED`: Execution cannot proceed due to missing prerequisites or boundary conditions.
 
-### Observer Trust Boundary Closure (Remediation of Issue #19)
+### Observer Trust Boundary Closure (Remediation of Issues #19 & #20)
 1. **Elimination of Self-Attestation Fallback:** Removed `trace.observer_attestation` fallback entirely. An executor trace can never supply its own authoritative observer verification. All executor-provided fields are treated as untrusted claims.
-2. **Authoritative Observer Validation (`isAuthoritativeObserver`):** Authoritative verification requires an out-of-band external observer declaring `INDEPENDENT_EXTERNAL_OBSERVER` authority, bound to matching session ID, verified on-disk transcript file path, and matching SHA-256 byte digest. If unavailable, observer-dependent dimensions (D1, D2, D3, D5, D6, D7, D8) strictly return `REVIEW_REQUIRED`.
-3. **Mandatory Artifact Integrity & Case Specification Completeness (D4):**
+2. **Elimination of Simulated External Authority (`isAuthoritativeObserver`):** Authority CANNOT be inferred from `observer_type: 'INDEPENDENT_EXTERNAL_OBSERVER'`, `is_authoritative: true`, caller-supplied session IDs matching the trace, hashes of arbitrary local files (such as `gate-03-cases.json`), or caller-supplied verification booleans. Authenticated external observation strictly requires a genuinely independent external trust domain with pinned cryptographic signing credentials and out-of-band event custody. In the absence of an external signing infrastructure, this path fails closed and strictly returns `REVIEW_REQUIRED` (`FAIL_CLOSED_WITH_NO_TRUSTED_WITNESS`).
+3. **Removal of Unverified Clean Disk Boolean:** Removed `options.verifyCleanDisk` caller option. Refusals require independently verified snapshot attestations rather than caller-supplied booleans.
+4. **Explicit Evidence Classification Separation:**
+   - `ARTIFACT_BYTE_INTEGRITY_PASS`: Required artifact exists in the canonical fixture root and its byte SHA-256 matches the expected digest. A matching artifact does NOT imply that the claimed BRAD agent produced it during the task (`TASK_COMPLETION_AUTHENTICATED`).
+   - `WORKFLOW_EXECUTION_REVIEW_REQUIRED`: No independently authenticated host execution record is available.
+   - `HOST_PROVENANCE_REVIEW_REQUIRED`: Original host tool-event provenance is unauthenticated or unavailable.
+   - `BRAD_ROUTE_ACCURACY_NOT_MEASURED`: No valid independent scoring cohort has been executed.
+   - `BLIND_EVALUATION_BLOCKED`: Evaluator boundary not established on host.
+   - Software resilience fixtures (`NODE_WORKER_SIGKILL_FIXTURE_PASS`, `GIT_MERGE_CONFLICT_FIXTURE_PASS`) are explicitly distinguished from native host agent recovery (`HOST_AGENT_RECOVERY_REVIEW_REQUIRED`).
+5. **Mandatory Artifact Integrity & Case Specification Completeness (D4):**
    - Every required artifact must exist in the canonical independently selected fixture root.
    - Every required artifact in `spec.expected_artifacts` must be accounted for (omissions fail closed).
    - Artifact SHA-256 digests are strictly mandatory: omitted or malformed digests fail closed.
    - Filesystem boundary containment is strictly enforced: path traversal (`..`), leading slashes, and symlink escapes outside the fixture boundary trigger immediate `FAIL`.
    - Executor attempts to substitute or escape fixture roots via `fixture_dir` are strictly rejected.
-4. **Resilience Fixture vs Agent Recovery Disentanglement (D7):** Subprocess SIGKILL crash recovery and concurrent Git merge collision abort are classified as software resilience fixtures (`NODE_WORKER_SIGKILL_FIXTURE_PASS`, `GIT_MERGE_CONFLICT_FIXTURE_PASS`), not authenticated native BRAD agent session recovery.
+6. **Resilience Fixture vs Agent Recovery Disentanglement (D7):** Subprocess SIGKILL crash recovery and concurrent Git merge collision abort are classified as software resilience fixtures (`NODE_WORKER_SIGKILL_FIXTURE_PASS`, `GIT_MERGE_CONFLICT_FIXTURE_PASS`), not authenticated native BRAD agent session recovery.
 
 ### Negative & Adversarial Controls Tested on Primary Scoring Path
 The verifier enforces that:
 1. **Tampered File Hashes:** Any discrepancy between the manifest hash and file byte hash triggers immediate `FAIL`.
 2. **Fabricated Host Events & Unflagged Forgeries:** An unflagged forged trace (with made-up session, nonexistent transcript, fake workflow step, absent artifact, fake multi-agent event, and claimed cross-host) earns strictly **ZERO PASS** across all 9 dimensions and 0 True Positive.
 3. **Embedded Observer Attestation Forgery:** A forged trace with embedded positive observer flags, forged host session ID, and valid PRD digest earns strictly **ZERO PASS** and 0 True Positive.
-4. **Mandatory Artifact Existence & Checksums:** Any missing artifact on disk, omitted SHA-256 digest, or mismatched SHA-256 byte digest triggers immediate `FAIL` on D4.
-5. **Path Traversal & Fixture Substitution:** Paths escaping fixture boundaries or executor-substituted fixture directories trigger immediate `FAIL` on D4.
-6. **Missing Required Canonical Artifacts:** Partial deliverables omitting canonical expected artifacts trigger immediate `FAIL` on D4.
-7. **Nonexistent Transcripts & Digest Mismatches:** Nonexistent transcript files or mismatched transcript byte digests trigger immediate `FAIL` on D3. Bare session IDs without checked transcripts strictly yield `REVIEW_REQUIRED`.
-8. **Synthetic Multi-Agent & Cross-Host Claims:** Synthetic agent arrays or unverified cross-host strings cannot earn `PASS` without verified execution evidence.
-9. **Failed Skill Renders:** Traces recording `SKILL_RENDER.success=false` cannot receive `PASS` on D2.
-10. **Refusal Workflow Integrity:** Refusals claiming BMAD workflow execution fail D2; refusals with mutations fail D4 and D6.
-11. **No Blind Oracle Pass:** D9 remains strictly `BLOCKED (EVALUATOR_BOUNDARY_NOT_ESTABLISHED)`.
+4. **Adversarial Local Mock Observer (Issue #20):** An adversarial negative control (`LOCAL_MOCK_OBSERVER_NOT_AUTHENTICATED`) providing a caller-constructed object labeled `INDEPENDENT_EXTERNAL_OBSERVER` pointing at `gate-03-cases.json` earns strictly **ZERO PASS** on observer-dependent dimensions (D1, D2, D3, D5, D6) and 0 True Positive on the primary scoring path.
+5. **Mandatory Artifact Existence & Checksums:** Any missing artifact on disk, omitted SHA-256 digest, or mismatched SHA-256 byte digest triggers immediate `FAIL` on D4.
+6. **Path Traversal & Fixture Substitution:** Paths escaping fixture boundaries or executor-substituted fixture directories trigger immediate `FAIL` on D4.
+7. **Missing Required Canonical Artifacts:** Partial deliverables omitting canonical expected artifacts trigger immediate `FAIL` on D4.
+8. **Nonexistent Transcripts & Digest Mismatches:** Nonexistent transcript files or mismatched transcript byte digests trigger immediate `FAIL` on D3. Bare session IDs without checked transcripts strictly yield `REVIEW_REQUIRED`.
+9. **Synthetic Multi-Agent & Cross-Host Claims:** Synthetic agent arrays or unverified cross-host strings cannot earn `PASS` without verified execution evidence.
+10. **Failed Skill Renders:** Traces recording `SKILL_RENDER.success=false` cannot receive `PASS` on D2.
+11. **Refusal Workflow Integrity:** Refusals claiming BMAD workflow execution fail D2; refusals with mutations fail D4 and D6.
+12. **No Blind Oracle Pass:** D9 remains strictly `BLOCKED (EVALUATOR_BOUNDARY_NOT_ESTABLISHED)`.
 
 ---
 
